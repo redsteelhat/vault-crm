@@ -44,6 +44,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Linux requires libsecret for keytar
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-dev libgnome-keyring-dev
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
@@ -56,7 +63,10 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
+
+      - name: Rebuild native modules
+        run: pnpm rebuild
 
       - name: Build application
         run: pnpm build
