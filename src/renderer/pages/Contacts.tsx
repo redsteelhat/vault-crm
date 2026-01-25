@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search, Filter, MoreVertical, Mail, Phone, Building2, Users } from 'lucide-react'
+import { Plus, Search, Filter, MoreVertical, Mail, Phone, Building2, Users, Linkedin, ChevronDown } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,6 +27,8 @@ import { useContactStore } from '@/stores/contactStore'
 import { formatRelativeDate, parseEmails, parsePhones, getInitials, debounce } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { DuplicateMergeDialog } from '@/components/DuplicateMergeDialog'
+import { LinkedInParser } from '@/components/LinkedInParser'
+import { UpgradePrompt } from '@/components/UpgradePrompt'
 
 export function Contacts() {
   const { t } = useTranslation()
@@ -47,6 +49,9 @@ export function Contacts() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isDuplicateOpen, setIsDuplicateOpen] = useState(false)
+  const [isLinkedInOpen, setIsLinkedInOpen] = useState(false)
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false)
+  const [tierInfo, setTierInfo] = useState<{ tier: 'free' | 'pro'; contactsRemaining: number } | null>(null)
   const [localSearch, setLocalSearch] = useState(searchQuery)
   const [newContact, setNewContact] = useState({
     name: '',
@@ -62,7 +67,30 @@ export function Contacts() {
   useEffect(() => {
     fetchContacts()
     fetchTags()
+    loadTierInfo()
   }, [fetchContacts, fetchTags])
+
+  const loadTierInfo = async () => {
+    try {
+      const info = await window.api.tier.getInfo()
+      setTierInfo(info)
+    } catch (error) {
+      console.error('Failed to load tier info:', error)
+    }
+  }
+
+  const checkCanAddContact = async (): Promise<boolean> => {
+    try {
+      const result = await window.api.tier.canAddContact()
+      if (!result.allowed) {
+        setIsUpgradeOpen(true)
+        return false
+      }
+      return true
+    } catch {
+      return true // Fail open
+    }
+  }
 
   const debouncedSearch = useCallback(
     debounce((query: string) => {
@@ -152,9 +180,26 @@ export function Contacts() {
             <Button variant="outline" onClick={() => setIsDuplicateOpen(true)}>
               <Users className="h-4 w-4 mr-2" /> {t('contacts.findDuplicates')}
             </Button>
-            <Button onClick={() => setIsCreateOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" /> {t('contacts.addContact')}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" /> {t('contacts.addContact')}
+                  <ChevronDown className="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={async () => {
+                  if (await checkCanAddContact()) setIsCreateOpen(true)
+                }}>
+                  <Plus className="h-4 w-4 mr-2" /> {t('contacts.addContact')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={async () => {
+                  if (await checkCanAddContact()) setIsLinkedInOpen(true)
+                }}>
+                  <Linkedin className="h-4 w-4 mr-2 text-[#0A66C2]" /> {t('linkedin.title')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -177,7 +222,9 @@ export function Contacts() {
                     : t('contacts.noContactsDesc')}
                 </p>
                 {!searchQuery && (
-                  <Button onClick={() => setIsCreateOpen(true)}>
+                  <Button onClick={async () => {
+                    if (await checkCanAddContact()) setIsCreateOpen(true)
+                  }}>
                     <Plus className="h-4 w-4 mr-2" /> {t('contacts.addContact')}
                   </Button>
                 )}
@@ -373,6 +420,41 @@ export function Contacts() {
         open={isDuplicateOpen}
         onOpenChange={setIsDuplicateOpen}
         onMergeComplete={() => fetchContacts()}
+      />
+
+      {/* LinkedIn Parser Dialog */}
+      <LinkedInParser
+        open={isLinkedInOpen}
+        onOpenChange={setIsLinkedInOpen}
+        onImport={async (data) => {
+          try {
+            await createContact({
+              name: data.name,
+              company: data.company || null,
+              title: data.title || null,
+              emails: data.emails ? JSON.stringify(data.emails) : '[]',
+              phones: '[]',
+              location: data.location || null,
+              source: data.source,
+              notes: data.notes || null,
+              last_contact_at: null
+            })
+            toast({ title: t('contacts.contactCreated'), variant: 'success' })
+            fetchContacts()
+            loadTierInfo() // Refresh tier info
+          } catch {
+            toast({ title: t('errors.saveFailed'), variant: 'destructive' })
+          }
+        }}
+      />
+
+      {/* Upgrade Prompt Dialog */}
+      <UpgradePrompt
+        open={isUpgradeOpen}
+        onOpenChange={setIsUpgradeOpen}
+        feature="maxContacts"
+        title={t('pricing.limitReached')}
+        message={t('pricing.limitReachedDesc', { limit: 50 })}
       />
     </div>
   )

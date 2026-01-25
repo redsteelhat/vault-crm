@@ -167,6 +167,79 @@ const api = {
       ipcRenderer.invoke('recovery:exitSafeMode')
   },
 
+  // Tier / Feature Gates
+  tier: {
+    getInfo: (): Promise<{
+      tier: 'free' | 'pro'
+      displayName: string
+      isLimited: boolean
+      contactLimit: number
+      contactsUsed: number
+      contactsRemaining: number
+      upgradeUrl: string
+    }> => ipcRenderer.invoke('tier:getInfo'),
+    getGates: (): Promise<{
+      maxContacts: number
+      csvImportEnabled: boolean
+      fullCsvImport: boolean
+      smartListsEnabled: boolean
+      allSmartLists: boolean
+      duplicateMergeEnabled: boolean
+      autoBackupEnabled: boolean
+      fullBackupEnabled: boolean
+      exportEnabled: boolean
+      fullExportEnabled: boolean
+    }> => ipcRenderer.invoke('tier:getGates'),
+    canAddContact: (): Promise<{ allowed: boolean; reason?: string; remaining?: number }> =>
+      ipcRenderer.invoke('tier:canAddContact'),
+    isFeatureEnabled: (feature: string): Promise<boolean> =>
+      ipcRenderer.invoke('tier:isFeatureEnabled', feature),
+    getUpgradePrompt: (feature: string): Promise<{ title: string; message: string; cta: string }> =>
+      ipcRenderer.invoke('tier:getUpgradePrompt', feature),
+    getComparison: (): Promise<Array<{
+      feature: string
+      description: string
+      free: boolean | string
+      pro: boolean | string
+    }>> => ipcRenderer.invoke('tier:getComparison'),
+    recordPromptShown: (feature: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('tier:recordPromptShown', feature)
+  },
+
+  // Auto Backup
+  backup: {
+    getConfig: (): Promise<{
+      enabled: boolean
+      frequency: 'daily' | 'weekly'
+      maxBackups: number
+      lastBackupAt: string | null
+    }> => ipcRenderer.invoke('backup:getConfig'),
+    setConfig: (config: {
+      enabled?: boolean
+      frequency?: 'daily' | 'weekly'
+      maxBackups?: number
+    }): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('backup:setConfig', config),
+    getList: (): Promise<{
+      backups: Array<{
+        name: string
+        path: string
+        date: string
+        sizeKB: number
+      }>
+      config: {
+        enabled: boolean
+        frequency: 'daily' | 'weekly'
+        maxBackups: number
+        lastBackupAt: string | null
+      }
+    }> => ipcRenderer.invoke('backup:getList'),
+    runNow: (): Promise<{ success: boolean; path?: string; error?: string }> =>
+      ipcRenderer.invoke('backup:runNow'),
+    delete: (backupPath: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('backup:delete', backupPath)
+  },
+
   // Auto-updater
   updater: {
     getStatus: (): Promise<{

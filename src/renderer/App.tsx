@@ -10,6 +10,7 @@ import { Settings } from './pages/Settings'
 import { SmartLists } from './pages/SmartLists'
 import { Unlock } from './pages/Unlock'
 import { Toaster } from './components/ui/toaster'
+import { CommandPalette } from './components/CommandPalette'
 
 function App() {
   const [isLocked, setIsLocked] = useState(true)
@@ -71,6 +72,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </MainLayout>
+      <CommandPalette />
       <Toaster />
     </>
   )

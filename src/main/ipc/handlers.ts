@@ -11,6 +11,22 @@ import { exportToCsv, backupDatabase } from '../services/exporter'
 import { getDatabasePath } from '../database/sqlite/connection'
 import { exportDiagnostics, getDiagnosticsSummary, logError } from '../services/diagnostics'
 import { getSafeModeStatus, getAvailableBackups, restoreFromBackup, deleteDatabase, exitSafeMode } from '../services/recovery'
+import { 
+  getBackupConfig, 
+  setBackupConfig, 
+  getBackupListForUI, 
+  runAutoBackup, 
+  deleteBackup 
+} from '../services/auto-backup'
+import {
+  getFeatureGates,
+  getTierInfo,
+  canAddContact,
+  isFeatureEnabled,
+  getUpgradePrompt,
+  getTierComparison,
+  recordUpgradePromptShown
+} from '../services/feature-gates'
 
 export function registerAllHandlers(ipcMain: IpcMain): void {
   // === CONTACTS ===
@@ -299,6 +315,62 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
 
   ipcMain.handle('recovery:exitSafeMode', () => {
     exitSafeMode()
+    return { success: true }
+  })
+
+  // === AUTO BACKUP ===
+  ipcMain.handle('backup:getConfig', () => {
+    return getBackupConfig()
+  })
+
+  ipcMain.handle('backup:setConfig', (_, config: Partial<{
+    enabled: boolean
+    frequency: 'daily' | 'weekly'
+    maxBackups: number
+  }>) => {
+    setBackupConfig(config)
+    return { success: true }
+  })
+
+  ipcMain.handle('backup:getList', () => {
+    return getBackupListForUI()
+  })
+
+  ipcMain.handle('backup:runNow', async () => {
+    return runAutoBackup()
+  })
+
+  ipcMain.handle('backup:delete', (_, backupPath: string) => {
+    return { success: deleteBackup(backupPath) }
+  })
+
+  // === FEATURE GATES / PRICING ===
+  ipcMain.handle('tier:getInfo', () => {
+    return getTierInfo()
+  })
+
+  ipcMain.handle('tier:getGates', () => {
+    return getFeatureGates()
+  })
+
+  ipcMain.handle('tier:canAddContact', () => {
+    return canAddContact()
+  })
+
+  ipcMain.handle('tier:isFeatureEnabled', (_, feature: string) => {
+    return isFeatureEnabled(feature as keyof ReturnType<typeof getFeatureGates>)
+  })
+
+  ipcMain.handle('tier:getUpgradePrompt', (_, feature: string) => {
+    return getUpgradePrompt(feature as keyof ReturnType<typeof getFeatureGates>)
+  })
+
+  ipcMain.handle('tier:getComparison', () => {
+    return getTierComparison()
+  })
+
+  ipcMain.handle('tier:recordPromptShown', (_, feature: string) => {
+    recordUpgradePromptShown(feature)
     return { success: true }
   })
 }

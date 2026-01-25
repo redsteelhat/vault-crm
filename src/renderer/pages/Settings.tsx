@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, Database, Moon, Sun, Shield, HardDrive, Info, Lock, Clock, Eye, EyeOff, Key, RefreshCw, MessageCircle, Bug, FileText, Radio, Globe } from 'lucide-react'
+import { Download, Database, Moon, Sun, Shield, HardDrive, Info, Lock, Clock, Eye, EyeOff, Key, RefreshCw, MessageCircle, Bug, FileText, Radio, Globe, Trash2, RotateCcw } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -54,10 +54,19 @@ export function Settings() {
   const [feedbackText, setFeedbackText] = useState('')
   const [includeDiagnostics, setIncludeDiagnostics] = useState(false)
 
+  // Auto Backup
+  const [autoBackupEnabled, setAutoBackupEnabled] = useState(true)
+  const [backupFrequency, setBackupFrequency] = useState<'daily' | 'weekly'>('daily')
+  const [maxBackups, setMaxBackups] = useState(10)
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null)
+  const [backupList, setBackupList] = useState<Array<{ name: string; path: string; date: string; sizeKB: number }>>([])
+  const [isRunningBackup, setIsRunningBackup] = useState(false)
+
   useEffect(() => {
     loadAppInfo()
     loadVaultSettings()
     loadUpdateSettings()
+    loadBackupSettings()
   }, [])
 
   const loadAppInfo = async () => {
@@ -93,6 +102,73 @@ export function Settings() {
       setAutoCheck(status.autoCheck)
     } catch (error) {
       console.error('Failed to load update settings:', error)
+    }
+  }
+
+  const loadBackupSettings = async () => {
+    try {
+      const data = await window.api.backup.getList()
+      setAutoBackupEnabled(data.config.enabled)
+      setBackupFrequency(data.config.frequency)
+      setMaxBackups(data.config.maxBackups)
+      setLastBackupAt(data.config.lastBackupAt)
+      setBackupList(data.backups)
+    } catch (error) {
+      console.error('Failed to load backup settings:', error)
+    }
+  }
+
+  const handleAutoBackupToggle = async () => {
+    const newValue = !autoBackupEnabled
+    setAutoBackupEnabled(newValue)
+    await window.api.backup.setConfig({ enabled: newValue })
+    toast({ title: newValue ? t('settings.autoBackupEnabled') : t('settings.autoBackupDisabled') })
+  }
+
+  const handleBackupFrequencyChange = async (value: 'daily' | 'weekly') => {
+    setBackupFrequency(value)
+    await window.api.backup.setConfig({ frequency: value })
+    toast({ title: t('settings.backupSuccess') })
+  }
+
+  const handleMaxBackupsChange = async (value: string) => {
+    const num = parseInt(value, 10)
+    setMaxBackups(num)
+    await window.api.backup.setConfig({ maxBackups: num })
+  }
+
+  const handleRunBackupNow = async () => {
+    setIsRunningBackup(true)
+    try {
+      const result = await window.api.backup.runNow()
+      if (result.success) {
+        toast({ title: t('settings.backupSuccess'), variant: 'success' })
+        await loadBackupSettings()
+      } else {
+        toast({ title: result.error || t('errors.backupFailed'), variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: t('errors.backupFailed'), variant: 'destructive' })
+    } finally {
+      setIsRunningBackup(false)
+    }
+  }
+
+  const handleDeleteBackup = async (backupPath: string) => {
+    try {
+      await window.api.backup.delete(backupPath)
+      toast({ title: t('settings.backupDeleted') })
+      await loadBackupSettings()
+    } catch {
+      toast({ title: t('errors.deleteFailed'), variant: 'destructive' })
+    }
+  }
+
+  const formatBackupDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleString()
+    } catch {
+      return dateStr
     }
   }
 
@@ -482,6 +558,115 @@ export function Settings() {
                   <HardDrive className="h-4 w-4 mr-2" /> {t('settings.backup')}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Auto Backup */}
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RotateCcw className="h-5 w-5" />
+                {t('settings.autoBackup')}
+              </CardTitle>
+              <CardDescription>{t('settings.autoBackupDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium">{t('settings.autoBackup')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.autoBackupDesc')}
+                  </p>
+                </div>
+                <Button
+                  variant={autoBackupEnabled ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={handleAutoBackupToggle}
+                >
+                  {autoBackupEnabled ? t('settings.enabled') : t('settings.disabled')}
+                </Button>
+              </div>
+
+              {autoBackupEnabled && (
+                <>
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                    <div>
+                      <p className="font-medium">{t('settings.backupFrequency')}</p>
+                    </div>
+                    <Select value={backupFrequency} onValueChange={(v) => handleBackupFrequencyChange(v as 'daily' | 'weekly')}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">{t('settings.daily')}</SelectItem>
+                        <SelectItem value="weekly">{t('settings.weekly')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                    <div>
+                      <p className="font-medium">{t('settings.maxBackups')}</p>
+                    </div>
+                    <Select value={maxBackups.toString()} onValueChange={handleMaxBackupsChange}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5">5 {t('settings.backups')}</SelectItem>
+                        <SelectItem value="10">10 {t('settings.backups')}</SelectItem>
+                        <SelectItem value="20">20 {t('settings.backups')}</SelectItem>
+                        <SelectItem value="30">30 {t('settings.backups')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                    <div>
+                      <p className="font-medium">{t('settings.lastBackup')}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {lastBackupAt ? formatBackupDate(lastBackupAt) : t('settings.neverBackedUp')}
+                      </p>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={handleRunBackupNow} 
+                      disabled={isRunningBackup}
+                    >
+                      <HardDrive className={`h-4 w-4 mr-2 ${isRunningBackup ? 'animate-pulse' : ''}`} />
+                      {isRunningBackup ? t('settings.runningBackup') : t('settings.runBackupNow')}
+                    </Button>
+                  </div>
+
+                  {backupList.length > 0 && (
+                    <div className="p-4 rounded-lg bg-muted/50">
+                      <p className="font-medium mb-3">{t('settings.recentBackups')}</p>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {backupList.map((backup) => (
+                          <div 
+                            key={backup.path} 
+                            className="flex items-center justify-between p-2 rounded bg-background/50"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-mono truncate">{backup.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatBackupDate(backup.date)} • {backup.sizeKB} KB
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteBackup(backup.path)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
 

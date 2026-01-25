@@ -16,6 +16,7 @@ import {
 import { legacyDatabaseExists, migrateFromJson, getMigrationStatus } from './database/legacy/json-migrator'
 import { registerAllHandlers } from './ipc/handlers'
 import { startScheduler, stopScheduler, setDbReady } from './services/scheduler'
+import { startAutoBackupScheduler, stopAutoBackupScheduler, setAutoBackupDbReady } from './services/auto-backup'
 import { setLastCleanExit } from './database/repositories/settings'
 import { 
   initAutoUpdater, 
@@ -169,6 +170,7 @@ function registerVaultHandlers(): void {
       resetIdleTimer()
       setLastCleanExit(false)
       setDbReady(true)
+      setAutoBackupDbReady(true)
       
       return { success: true }
     } catch (error) {
@@ -187,6 +189,7 @@ function registerVaultHandlers(): void {
       resetIdleTimer()
       setLastCleanExit(false)
       setDbReady(true)
+      setAutoBackupDbReady(true)
       
       return { success: true }
     } catch (error) {
@@ -199,6 +202,7 @@ function registerVaultHandlers(): void {
   ipcMain.handle('vault:lock', () => {
     lockVault()
     setDbReady(false)
+    setAutoBackupDbReady(false)
     closeDatabase()
     return { success: true }
   })
@@ -263,6 +267,9 @@ app.whenReady().then(async () => {
 
   // Start follow-up scheduler (will only work when unlocked)
   startScheduler()
+  
+  // Start auto-backup scheduler
+  startAutoBackupScheduler()
 
   // Register update handlers
   registerUpdateHandlers()
@@ -317,6 +324,7 @@ function registerUpdateHandlers(): void {
 
 app.on('window-all-closed', () => {
   stopScheduler()
+  stopAutoBackupScheduler()
   clearIdleTimer()
   
   if (isUnlocked) {
