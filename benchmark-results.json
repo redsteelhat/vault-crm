@@ -1,0 +1,180 @@
+{
+  "timestamp": "2026-01-25T17:33:02.984Z",
+  "config": {
+    "searchIterations": 100,
+    "crudIterations": 1000,
+    "searchTerms": [
+      "john",
+      "smith",
+      "tech",
+      "ceo",
+      "istanbul",
+      "new york",
+      "sales",
+      "engineer"
+    ]
+  },
+  "dataStats": {
+    "contacts": 10000,
+    "interactions": 49512,
+    "followups": 20027,
+    "tags": 15,
+    "contact_tags": 14843
+  },
+  "dbSize": 26578944,
+  "results": [
+    {
+      "name": "Search: \"john\"",
+      "iterations": 100,
+      "totalMs": 766.59,
+      "avgMs": 7.67,
+      "minMs": 6.61,
+      "maxMs": 11.18,
+      "opsPerSecond": 130
+    },
+    {
+      "name": "Search: \"smith\"",
+      "iterations": 100,
+      "totalMs": 795.45,
+      "avgMs": 7.95,
+      "minMs": 7.24,
+      "maxMs": 11.64,
+      "opsPerSecond": 126
+    },
+    {
+      "name": "Search: \"tech\"",
+      "iterations": 100,
+      "totalMs": 872.98,
+      "avgMs": 8.73,
+      "minMs": 7.38,
+      "maxMs": 17.45,
+      "opsPerSecond": 115
+    },
+    {
+      "name": "Search: \"ceo\"",
+      "iterations": 100,
+      "totalMs": 801,
+      "avgMs": 8.01,
+      "minMs": 7.17,
+      "maxMs": 9.55,
+      "opsPerSecond": 125
+    },
+    {
+      "name": "Search: \"istanbul\"",
+      "iterations": 100,
+      "totalMs": 780.06,
+      "avgMs": 7.8,
+      "minMs": 7.22,
+      "maxMs": 9.79,
+      "opsPerSecond": 128
+    },
+    {
+      "name": "Search: \"new york\"",
+      "iterations": 100,
+      "totalMs": 802.23,
+      "avgMs": 8.02,
+      "minMs": 7.03,
+      "maxMs": 11.69,
+      "opsPerSecond": 125
+    },
+    {
+      "name": "Search: \"sales\"",
+      "iterations": 100,
+      "totalMs": 1106.46,
+      "avgMs": 11.06,
+      "minMs": 8.31,
+      "maxMs": 12.9,
+      "opsPerSecond": 90
+    },
+    {
+      "name": "Search: \"engineer\"",
+      "iterations": 100,
+      "totalMs": 1249.65,
+      "avgMs": 12.5,
+      "minMs": 9.46,
+      "maxMs": 17.27,
+      "opsPerSecond": 80
+    },
+    {
+      "name": "Get all contacts",
+      "iterations": 20,
+      "totalMs": 2220.82,
+      "avgMs": 111.04,
+      "minMs": 84.75,
+      "maxMs": 135.71,
+      "opsPerSecond": 9
+    },
+    {
+      "name": "Get contact by ID",
+      "iterations": 1000,
+      "totalMs": 41.97,
+      "avgMs": 0.04,
+      "minMs": 0.02,
+      "maxMs": 0.36,
+      "opsPerSecond": 23828
+    },
+    {
+      "name": "Insert contact",
+      "iterations": 1000,
+      "totalMs": 151.39,
+      "avgMs": 0.15,
+      "minMs": 0.04,
+      "maxMs": 18.03,
+      "opsPerSecond": 6605
+    },
+    {
+      "name": "Update contact",
+      "iterations": 1000,
+      "totalMs": 67.91,
+      "avgMs": 0.07,
+      "minMs": 0.03,
+      "maxMs": 0.28,
+      "opsPerSecond": 14726
+    },
+    {
+      "name": "Get due today followups",
+      "iterations": 100,
+      "totalMs": 672.1,
+      "avgMs": 6.72,
+      "minMs": 4.71,
+      "maxMs": 12.05,
+      "opsPerSecond": 149
+    },
+    {
+      "name": "Get overdue followups",
+      "iterations": 100,
+      "totalMs": 2848.96,
+      "avgMs": 28.49,
+      "minMs": 22.67,
+      "maxMs": 34.54,
+      "opsPerSecond": 35
+    },
+    {
+      "name": "Encrypt database",
+      "iterations": 10,
+      "totalMs": 815.32,
+      "avgMs": 81.53,
+      "minMs": 51.04,
+      "maxMs": 125.78,
+      "opsPerSecond": 12
+    },
+    {
+      "name": "Decrypt database",
+      "iterations": 10,
+      "totalMs": 372.44,
+      "avgMs": 37.24,
+      "minMs": 24.94,
+      "maxMs": 59.85,
+      "opsPerSecond": 27
+    },
+    {
+      "name": "Export + Encrypt cycle",
+      "iterations": 10,
+      "totalMs": 655.55,
+      "avgMs": 65.55,
+      "minMs": 51.75,
+      "maxMs": 75.26,
+      "opsPerSecond": 15
+    }
+  ]
+}

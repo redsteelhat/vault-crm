@@ -17,7 +17,7 @@
  *   --output      Optional. Output file path (default: stdout)
  */
 
-import { generateKeyPairSync, createSign, randomBytes, createHash } from 'crypto'
+import { generateKeyPairSync, sign, createPrivateKey } from 'crypto'
 import { writeFileSync, existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 
@@ -69,13 +69,17 @@ function ensureKeyPair(): { privateKey: string; publicKey: string } {
   return { privateKey, publicKey }
 }
 
-// Sign the license payload
-function signLicense(payload: Omit<LicensePayload, 'signature'>, privateKey: string): string {
-  const message = JSON.stringify(payload)
-  const sign = createSign('sha256')
-  sign.update(message)
-  sign.end()
-  return sign.sign(privateKey, 'base64')
+// Sign the license payload using Ed25519
+function signLicense(payload: Omit<LicensePayload, 'signature'>, privateKeyPem: string): string {
+  const message = Buffer.from(JSON.stringify(payload))
+  
+  // Create private key object from PEM
+  const privateKey = createPrivateKey(privateKeyPem)
+  
+  // Sign using Ed25519 (no digest algorithm needed - Ed25519 uses its own)
+  const signature = sign(null, message, privateKey)
+  
+  return signature.toString('base64')
 }
 
 // Calculate trial expiration (14 days from now)
