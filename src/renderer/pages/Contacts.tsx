@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, Search, Filter, MoreVertical, Mail, Phone, Building2 } from 'lucide-react'
+import { Plus, Search, Filter, MoreVertical, Mail, Phone, Building2, Users } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,7 @@ import { useContactStore } from '@/stores/contactStore'
 import { formatRelativeDate, parseEmails, parsePhones, getInitials, debounce } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { useCallback } from 'react'
+import { DuplicateMergeDialog } from '@/components/DuplicateMergeDialog'
 
 export function Contacts() {
   const navigate = useNavigate()
@@ -44,6 +45,7 @@ export function Contacts() {
   } = useContactStore()
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isDuplicateOpen, setIsDuplicateOpen] = useState(false)
   const [localSearch, setLocalSearch] = useState(searchQuery)
   const [newContact, setNewContact] = useState({
     name: '',
@@ -145,9 +147,14 @@ export function Contacts() {
               <Filter className="h-4 w-4" />
             </Button>
           </div>
-          <Button onClick={() => setIsCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" /> Add Contact
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setIsDuplicateOpen(true)}>
+              <Users className="h-4 w-4 mr-2" /> Find Duplicates
+            </Button>
+            <Button onClick={() => setIsCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" /> Add Contact
+            </Button>
+          </div>
         </div>
 
         {/* Contact List */}
@@ -359,6 +366,13 @@ export function Contacts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Duplicate Merge Dialog */}
+      <DuplicateMergeDialog
+        open={isDuplicateOpen}
+        onOpenChange={setIsDuplicateOpen}
+        onMergeComplete={() => fetchContacts()}
+      />
     </div>
   )
 }

@@ -6,7 +6,9 @@ import {
   Upload,
   Settings,
   Shield,
-  ChevronLeft
+  ChevronLeft,
+  Sparkles,
+  Lock
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -19,6 +21,7 @@ const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/contacts', icon: Users, label: 'Contacts' },
   { path: '/followups', icon: CalendarClock, label: 'Follow-ups' },
+  { path: '/smart-lists', icon: Sparkles, label: 'Smart Lists' },
   { path: '/import', icon: Upload, label: 'Import' },
   { path: '/settings', icon: Settings, label: 'Settings' }
 ]

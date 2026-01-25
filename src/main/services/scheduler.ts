@@ -5,6 +5,7 @@ import { IPC_CHANNELS } from '../ipc/channels'
 
 let schedulerInterval: NodeJS.Timeout | null = null
 let lastCheckDate: string | null = null
+let isDbReady = false
 
 const CHECK_INTERVAL = 60 * 1000 // Check every minute
 const MORNING_HOUR = 9 // Show batch notification at 9 AM
@@ -12,11 +13,16 @@ const MORNING_HOUR = 9 // Show batch notification at 9 AM
 export function startScheduler(): void {
   console.log('Starting follow-up scheduler...')
 
-  // Initial check
-  checkFollowups()
-
-  // Set up interval
+  // Set up interval (don't run initial check - wait for unlock)
   schedulerInterval = setInterval(checkFollowups, CHECK_INTERVAL)
+}
+
+export function setDbReady(ready: boolean): void {
+  isDbReady = ready
+  if (ready) {
+    // Run initial check when db becomes ready
+    checkFollowups()
+  }
 }
 
 export function stopScheduler(): void {
@@ -28,6 +34,11 @@ export function stopScheduler(): void {
 }
 
 function checkFollowups(): void {
+  // Don't check if database is not ready (vault not unlocked)
+  if (!isDbReady) {
+    return
+  }
+  
   try {
     const now = new Date()
     const today = now.toISOString().split('T')[0]

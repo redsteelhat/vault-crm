@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
-import { Download, Database, Moon, Sun, Shield, HardDrive, Info } from 'lucide-react'
+import { Download, Database, Moon, Sun, Shield, HardDrive, Info, Lock, Clock, Eye, EyeOff, Key } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useUIStore } from '@/stores/uiStore'
 import { useContactStore } from '@/stores/contactStore'
 import { useToast } from '@/hooks/useToast'
-import { formatDate } from '@/lib/utils'
 
 export function Settings() {
   const { toast } = useToast()
@@ -22,9 +25,20 @@ export function Settings() {
     dataPath: ''
   })
   const [isExporting, setIsExporting] = useState(false)
+  const [idleTimeout, setIdleTimeout] = useState(15)
+  const [lockOnMinimize, setLockOnMinimize] = useState(false)
+  
+  // Password change dialog
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPasswords, setShowPasswords] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
 
   useEffect(() => {
     loadAppInfo()
+    loadVaultSettings()
   }, [])
 
   const loadAppInfo = async () => {
@@ -40,6 +54,68 @@ export function Settings() {
     }
   }
 
+  const loadVaultSettings = async () => {
+    try {
+      const [timeout, lockMin] = await Promise.all([
+        window.api.vault.getIdleTimeout(),
+        window.api.vault.getLockOnMinimize()
+      ])
+      setIdleTimeout(timeout)
+      setLockOnMinimize(lockMin)
+    } catch (error) {
+      console.error('Failed to load vault settings:', error)
+    }
+  }
+
+  const handleIdleTimeoutChange = async (value: string) => {
+    const minutes = parseInt(value, 10)
+    setIdleTimeout(minutes)
+    await window.api.vault.setIdleTimeout(minutes)
+    toast({ title: 'Idle timeout updated' })
+  }
+
+  const handleLockOnMinimizeChange = async () => {
+    const newValue = !lockOnMinimize
+    setLockOnMinimize(newValue)
+    await window.api.vault.setLockOnMinimize(newValue)
+    toast({ title: newValue ? 'Lock on minimize enabled' : 'Lock on minimize disabled' })
+  }
+
+  const handleLockNow = async () => {
+    await window.api.vault.lock()
+    // The app will redirect to unlock screen
+  }
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Passwords do not match', variant: 'destructive' })
+      return
+    }
+
+    if (newPassword.length < 8) {
+      toast({ title: 'Password must be at least 8 characters', variant: 'destructive' })
+      return
+    }
+
+    setIsChangingPassword(true)
+    try {
+      const result = await window.api.vault.changePassword(currentPassword, newPassword)
+      if (result.success) {
+        toast({ title: 'Password changed successfully', variant: 'success' })
+        setShowPasswordDialog(false)
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+      } else {
+        toast({ title: result.error || 'Failed to change password', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'An error occurred', variant: 'destructive' })
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }
+
   const handleExportCsv = async () => {
     try {
       const path = await window.api.export.selectSaveLocation('vaultcrm-contacts.csv', [
@@ -50,7 +126,7 @@ export function Settings() {
         await window.api.export.csv(path)
         toast({ title: 'Contacts exported successfully', variant: 'success' })
       }
-    } catch (error) {
+    } catch {
       toast({ title: 'Export failed', variant: 'destructive' })
     }
     setIsExporting(false)
@@ -59,14 +135,14 @@ export function Settings() {
   const handleBackup = async () => {
     try {
       const date = new Date().toISOString().split('T')[0]
-      const path = await window.api.export.selectSaveLocation(`vaultcrm-backup-${date}.db`, [
-        { name: 'Database Files', extensions: ['db'] }
+      const path = await window.api.export.selectSaveLocation(`vaultcrm-backup-${date}.zip`, [
+        { name: 'Backup Files', extensions: ['zip'] }
       ])
       if (path) {
         await window.api.export.backup(path)
         toast({ title: 'Backup created successfully', variant: 'success' })
       }
-    } catch (error) {
+    } catch {
       toast({ title: 'Backup failed', variant: 'destructive' })
     }
   }
@@ -77,6 +153,142 @@ export function Settings() {
 
       <ScrollArea className="flex-1">
         <div className="p-6 max-w-3xl mx-auto space-y-6">
+          {/* Vault Security */}
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5" />
+                Vault Security
+              </CardTitle>
+              <CardDescription>Manage your vault password and security settings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium">Master Password</p>
+                  <p className="text-sm text-muted-foreground">
+                    Change your vault encryption password
+                  </p>
+                </div>
+                <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <Key className="h-4 w-4 mr-2" /> Change
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Change Master Password</DialogTitle>
+                      <DialogDescription>
+                        Enter your current password and choose a new one.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="current">Current Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="current"
+                            type={showPasswords ? 'text' : 'password'}
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            placeholder="Enter current password"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="new">New Password</Label>
+                        <Input
+                          id="new"
+                          type={showPasswords ? 'text' : 'password'}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Enter new password"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirm">Confirm New Password</Label>
+                        <Input
+                          id="confirm"
+                          type={showPasswords ? 'text' : 'password'}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Confirm new password"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowPasswords(!showPasswords)}
+                        className="text-muted-foreground"
+                      >
+                        {showPasswords ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                        {showPasswords ? 'Hide' : 'Show'} passwords
+                      </Button>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowPasswordDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleChangePassword} disabled={isChangingPassword}>
+                        {isChangingPassword ? 'Changing...' : 'Change Password'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium">Auto-Lock Timeout</p>
+                  <p className="text-sm text-muted-foreground">
+                    Lock vault after inactivity
+                  </p>
+                </div>
+                <Select value={idleTimeout.toString()} onValueChange={handleIdleTimeoutChange}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 minutes</SelectItem>
+                    <SelectItem value="15">15 minutes</SelectItem>
+                    <SelectItem value="30">30 minutes</SelectItem>
+                    <SelectItem value="60">1 hour</SelectItem>
+                    <SelectItem value="0">Never</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium">Lock on Minimize</p>
+                  <p className="text-sm text-muted-foreground">
+                    Lock vault when window loses focus
+                  </p>
+                </div>
+                <Button
+                  variant={lockOnMinimize ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={handleLockOnMinimizeChange}
+                >
+                  {lockOnMinimize ? 'Enabled' : 'Disabled'}
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <div>
+                  <p className="font-medium text-amber-500">Lock Now</p>
+                  <p className="text-sm text-muted-foreground">
+                    Immediately lock your vault
+                  </p>
+                </div>
+                <Button variant="destructive" size="sm" onClick={handleLockNow}>
+                  <Lock className="h-4 w-4 mr-2" /> Lock Vault
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Appearance */}
           <Card className="border-none shadow-sm">
             <CardHeader>
@@ -139,7 +351,7 @@ export function Settings() {
                 <div>
                   <p className="font-medium">Backup Database</p>
                   <p className="text-sm text-muted-foreground">
-                    Create a full backup of your local database
+                    Create a full encrypted backup
                   </p>
                 </div>
                 <Button variant="outline" onClick={handleBackup}>
@@ -154,21 +366,21 @@ export function Settings() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                Privacy & Security
+                Privacy & Encryption
               </CardTitle>
-              <CardDescription>Your data stays on your device</CardDescription>
+              <CardDescription>Your data is protected</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-start gap-3 p-4 rounded-lg bg-green-500/10">
-                  <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
-                    <Shield className="h-4 w-4 text-green-500" />
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                    <Shield className="h-4 w-4 text-emerald-500" />
                   </div>
                   <div>
-                    <p className="font-medium text-green-500">Local-First Architecture</p>
+                    <p className="font-medium text-emerald-500">AES-256-GCM Encryption</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      All your data is stored locally on your device. No cloud sync, no data
-                      collection. Your network is your own.
+                      All your data is encrypted with military-grade encryption. Your master password 
+                      never leaves your device.
                     </p>
                   </div>
                 </div>
@@ -181,7 +393,7 @@ export function Settings() {
                   <div className="p-4 rounded-lg bg-muted/50">
                     <p className="text-sm text-muted-foreground">Encryption</p>
                     <Badge variant="secondary" className="mt-1">
-                      SQLite with WAL mode
+                      AES-256-GCM + PBKDF2
                     </Badge>
                   </div>
                 </div>
@@ -200,7 +412,7 @@ export function Settings() {
             <CardContent>
               <div className="grid grid-cols-3 gap-4">
                 <div className="p-4 rounded-lg bg-muted/50 text-center">
-                  <p className="text-2xl font-bold">{appInfo.version || '0.1.0'}</p>
+                  <p className="text-2xl font-bold">{appInfo.version || '1.0.0'}</p>
                   <p className="text-sm text-muted-foreground">Version</p>
                 </div>
                 <div className="p-4 rounded-lg bg-muted/50 text-center">
@@ -218,7 +430,7 @@ export function Settings() {
               <div className="text-center text-sm text-muted-foreground">
                 <p className="font-medium">VaultCRM - Local-First Personal CRM</p>
                 <p className="mt-1">Privacy-first relationship management for professionals</p>
-                <p className="mt-4">© 2024 VaultCRM. All rights reserved.</p>
+                <p className="mt-4">© 2026 VaultCRM. All rights reserved.</p>
               </div>
             </CardContent>
           </Card>

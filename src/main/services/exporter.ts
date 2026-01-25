@@ -1,46 +1,101 @@
-import { writeFileSync } from 'fs'
+import { writeFileSync, createWriteStream } from 'fs'
+import { join } from 'path'
 import Papa from 'papaparse'
-import * as contactsRepo from '../database/repositories/contacts'
-import { getDatabaseBuffer } from '../database/connection'
+import { getAllContacts } from '../database/repositories/contacts'
+import { exportDatabaseBuffer, getDatabasePath } from '../database/sqlite/connection'
+import { setLastBackupAt } from '../database/repositories/settings'
+import archiver from 'archiver'
 
-export function exportToCsv(filePath: string): void {
-  const contacts = contactsRepo.getAllContacts()
+export async function exportToCsv(filePath: string): Promise<void> {
+  const contacts = getAllContacts()
 
-  const data = contacts.map((contact) => {
-    let emails: string[] = []
-    let phones: string[] = []
+  // Transform contacts for CSV export
+  const csvData = contacts.map((contact) => ({
+    id: contact.id,
+    name: contact.name,
+    company: contact.company || '',
+    title: contact.title || '',
+    emails: parseJsonArray(contact.emails).join('; '),
+    phones: parseJsonArray(contact.phones).join('; '),
+    location: contact.location || '',
+    source: contact.source || '',
+    notes: contact.notes || '',
+    last_contact_at: contact.last_contact_at || '',
+    created_at: contact.created_at,
+    updated_at: contact.updated_at
+  }))
 
+  const csv = Papa.unparse(csvData)
+  writeFileSync(filePath, csv, 'utf-8')
+}
+
+export async function backupDatabase(filePath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const output = createWriteStream(filePath)
+    const archive = archiver('zip', { zlib: { level: 9 } })
+
+    output.on('close', () => {
+      // Update last backup timestamp
+      setLastBackupAt(new Date().toISOString())
+      resolve()
+    })
+
+    archive.on('error', (err) => {
+      reject(err)
+    })
+
+    archive.pipe(output)
+
+    // Add database file
     try {
-      emails = JSON.parse(contact.emails)
+      const dbBuffer = exportDatabaseBuffer()
+      archive.append(dbBuffer, { name: 'vaultcrm.db' })
     } catch {
-      emails = []
+      // If database export fails, try adding raw file
+      const dbPath = getDatabasePath()
+      if (dbPath) {
+        archive.file(dbPath, { name: 'vaultcrm.db' })
+      }
     }
 
-    try {
-      phones = JSON.parse(contact.phones)
-    } catch {
-      phones = []
+    // Add manifest with version info
+    const manifest = {
+      version: '1.0.0',
+      format: 'vaultcrm_backup_v1',
+      created_at: new Date().toISOString(),
+      storage_type: 'sqlite_encrypted'
     }
+    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' })
 
-    return {
+    // Export contacts as CSV for easy recovery
+    const contacts = getAllContacts()
+    const csvData = contacts.map((contact) => ({
+      id: contact.id,
       name: contact.name,
-      email: emails[0] || '',
       company: contact.company || '',
       title: contact.title || '',
-      phone: phones[0] || '',
+      emails: parseJsonArray(contact.emails).join('; '),
+      phones: parseJsonArray(contact.phones).join('; '),
       location: contact.location || '',
       source: contact.source || '',
       notes: contact.notes || '',
       last_contact_at: contact.last_contact_at || '',
-      created_at: contact.created_at
-    }
-  })
+      created_at: contact.created_at,
+      updated_at: contact.updated_at
+    }))
+    const csv = Papa.unparse(csvData)
+    archive.append(csv, { name: 'contacts_export.csv' })
 
-  const csv = Papa.unparse(data)
-  writeFileSync(filePath, csv, 'utf-8')
+    archive.finalize()
+  })
 }
 
-export function backupDatabase(filePath: string): void {
-  const buffer = getDatabaseBuffer()
-  writeFileSync(filePath, buffer)
+function parseJsonArray(json: string | null): string[] {
+  if (!json) return []
+  try {
+    const parsed = JSON.parse(json)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }

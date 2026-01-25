@@ -3,6 +3,32 @@ import type { Contact, Interaction, Tag, FollowUp, Settings } from '../main/data
 
 // API exposed to renderer
 const api = {
+  // Vault management
+  vault: {
+    isSetup: (): Promise<boolean> => ipcRenderer.invoke('vault:isSetup'),
+    isLocked: (): Promise<boolean> => ipcRenderer.invoke('vault:isLocked'),
+    keychainAvailable: (): Promise<boolean> => ipcRenderer.invoke('vault:keychainAvailable'),
+    setup: (password: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('vault:setup', password),
+    unlock: (password: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('vault:unlock', password),
+    lock: (): Promise<{ success: boolean }> => ipcRenderer.invoke('vault:lock'),
+    changePassword: (
+      currentPassword: string,
+      newPassword: string
+    ): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('vault:changePassword', currentPassword, newPassword),
+    getIdleTimeout: (): Promise<number> => ipcRenderer.invoke('vault:getIdleTimeout'),
+    setIdleTimeout: (minutes: number): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('vault:setIdleTimeout', minutes),
+    getLockOnMinimize: (): Promise<boolean> => ipcRenderer.invoke('vault:getLockOnMinimize'),
+    setLockOnMinimize: (enabled: boolean): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('vault:setLockOnMinimize', enabled),
+    getMigrationStatus: (): Promise<'not_needed' | 'pending' | 'completed'> =>
+      ipcRenderer.invoke('vault:getMigrationStatus'),
+    hasLegacyData: (): Promise<boolean> => ipcRenderer.invoke('vault:hasLegacyData')
+  },
+
   // Contacts
   contacts: {
     getAll: (): Promise<Contact[]> => ipcRenderer.invoke('contacts:getAll'),
@@ -21,7 +47,11 @@ const api = {
     getTags: (contactId: string): Promise<Tag[]> =>
       ipcRenderer.invoke('contacts:getTags', contactId),
     checkDuplicate: (email: string): Promise<Contact | null> =>
-      ipcRenderer.invoke('contacts:checkDuplicate', email)
+      ipcRenderer.invoke('contacts:checkDuplicate', email),
+    getStale: (days: number): Promise<Contact[]> =>
+      ipcRenderer.invoke('contacts:getStale', days),
+    getHotList: (): Promise<Contact[]> => ipcRenderer.invoke('contacts:getHotList'),
+    getCount: (): Promise<number> => ipcRenderer.invoke('contacts:getCount')
   },
 
   // Interactions
@@ -32,7 +62,10 @@ const api = {
       ipcRenderer.invoke('interactions:create', data),
     update: (id: string, data: Partial<Interaction>): Promise<Interaction> =>
       ipcRenderer.invoke('interactions:update', id, data),
-    delete: (id: string): Promise<void> => ipcRenderer.invoke('interactions:delete', id)
+    delete: (id: string): Promise<void> => ipcRenderer.invoke('interactions:delete', id),
+    getRecent: (limit: number): Promise<Interaction[]> =>
+      ipcRenderer.invoke('interactions:getRecent', limit),
+    getCount: (): Promise<number> => ipcRenderer.invoke('interactions:getCount')
   },
 
   // Tags
@@ -41,7 +74,9 @@ const api = {
     create: (data: Omit<Tag, 'id'>): Promise<Tag> => ipcRenderer.invoke('tags:create', data),
     update: (id: string, data: Partial<Tag>): Promise<Tag> =>
       ipcRenderer.invoke('tags:update', id, data),
-    delete: (id: string): Promise<void> => ipcRenderer.invoke('tags:delete', id)
+    delete: (id: string): Promise<void> => ipcRenderer.invoke('tags:delete', id),
+    getWithCounts: (): Promise<(Tag & { contact_count: number })[]> =>
+      ipcRenderer.invoke('tags:getWithCounts')
   },
 
   // Follow-ups
@@ -60,7 +95,8 @@ const api = {
     markDone: (id: string): Promise<FollowUp> => ipcRenderer.invoke('followups:markDone', id),
     snooze: (id: string, newDate: string): Promise<FollowUp> =>
       ipcRenderer.invoke('followups:snooze', id, newDate),
-    delete: (id: string): Promise<void> => ipcRenderer.invoke('followups:delete', id)
+    delete: (id: string): Promise<void> => ipcRenderer.invoke('followups:delete', id),
+    getOpenCount: (): Promise<number> => ipcRenderer.invoke('followups:getOpenCount')
   },
 
   // Settings
@@ -104,6 +140,12 @@ const api = {
 
   // Events
   on: (channel: string, callback: (...args: unknown[]) => void) => {
+    const allowedChannels = ['vault:locked', 'followup:reminder', 'notification:click']
+    if (!allowedChannels.includes(channel)) {
+      console.warn(`Channel ${channel} is not allowed`)
+      return () => {}
+    }
+    
     const subscription = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args)
     ipcRenderer.on(channel, subscription)
     return () => {

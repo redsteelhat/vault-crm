@@ -4,10 +4,10 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ exclude: ['uuid', 'sql.js'] })],
+    plugins: [externalizeDepsPlugin({ exclude: ['uuid'] })],
     build: {
       rollupOptions: {
-        external: []
+        external: ['keytar'] // keytar is a native module, must be external
       }
     }
   },

@@ -1,133 +1,249 @@
-import { v4 as uuid } from 'uuid'
-import { getAllFromTable, getById, insert, update, remove, getContactTags, addContactTag, removeContactTag, getDatabase, saveDatabase } from '../connection'
+import { v4 as uuidv4 } from 'uuid'
+import { query, queryOne, run, transaction, saveDatabase, getDb } from '../sqlite/connection'
 import type { Contact, Tag } from '../types'
 
 export function getAllContacts(): Contact[] {
-  return getAllFromTable<Contact>('contacts').sort((a, b) => a.name.localeCompare(b.name))
+  return query<Contact>(`
+    SELECT * FROM contacts 
+    WHERE deleted_at IS NULL 
+    ORDER BY updated_at DESC
+  `)
 }
 
 export function getContactById(id: string): Contact | null {
-  return getById<Contact>('contacts', id)
+  return queryOne<Contact>(`
+    SELECT * FROM contacts 
+    WHERE id = ? AND deleted_at IS NULL
+  `, [id])
 }
 
 export function createContact(data: Omit<Contact, 'id' | 'created_at' | 'updated_at'>): Contact {
+  const id = uuidv4()
   const now = new Date().toISOString()
-  const contact: Contact = {
-    id: `contact_${uuid()}`,
-    name: data.name,
-    company: data.company || null,
-    title: data.title || null,
-    emails: data.emails || '[]',
-    phones: data.phones || '[]',
-    location: data.location || null,
-    source: data.source || null,
-    notes: data.notes || null,
-    last_contact_at: data.last_contact_at || null,
-    created_at: now,
-    updated_at: now
-  }
-  return insert('contacts', contact)
+  
+  run(`
+    INSERT INTO contacts (id, name, company, title, emails, phones, location, source, notes, last_contact_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    id,
+    data.name,
+    data.company || null,
+    data.title || null,
+    data.emails || '[]',
+    data.phones || '[]',
+    data.location || null,
+    data.source || null,
+    data.notes || null,
+    data.last_contact_at || null,
+    now,
+    now
+  ])
+  
+  return getContactById(id)!
 }
 
-export function updateContact(id: string, data: Partial<Contact>): Contact {
+export function updateContact(id: string, data: Partial<Contact>): Contact | null {
+  const existing = getContactById(id)
+  if (!existing) return null
+  
   const now = new Date().toISOString()
-  const updated = update<Contact>('contacts', id, { ...data, updated_at: now })
-  if (!updated) throw new Error('Contact not found')
-  return updated
+  const updates: string[] = ['updated_at = ?']
+  const params: unknown[] = [now]
+  
+  if (data.name !== undefined) {
+    updates.push('name = ?')
+    params.push(data.name)
+  }
+  if (data.company !== undefined) {
+    updates.push('company = ?')
+    params.push(data.company)
+  }
+  if (data.title !== undefined) {
+    updates.push('title = ?')
+    params.push(data.title)
+  }
+  if (data.emails !== undefined) {
+    updates.push('emails = ?')
+    params.push(data.emails)
+  }
+  if (data.phones !== undefined) {
+    updates.push('phones = ?')
+    params.push(data.phones)
+  }
+  if (data.location !== undefined) {
+    updates.push('location = ?')
+    params.push(data.location)
+  }
+  if (data.source !== undefined) {
+    updates.push('source = ?')
+    params.push(data.source)
+  }
+  if (data.notes !== undefined) {
+    updates.push('notes = ?')
+    params.push(data.notes)
+  }
+  if (data.last_contact_at !== undefined) {
+    updates.push('last_contact_at = ?')
+    params.push(data.last_contact_at)
+  }
+  
+  params.push(id)
+  
+  run(`UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`, params)
+  
+  return getContactById(id)
 }
 
 export function deleteContact(id: string): void {
-  // Also remove related data
-  const db = getDatabase()
-  db.contact_tags = db.contact_tags.filter(ct => ct.contact_id !== id)
-  
-  // Remove interactions
-  Object.keys(db.interactions).forEach(key => {
-    if (db.interactions[key].contact_id === id) {
-      delete db.interactions[key]
-    }
-  })
-  
-  // Remove followups
-  Object.keys(db.followups).forEach(key => {
-    if (db.followups[key].contact_id === id) {
-      delete db.followups[key]
-    }
-  })
-  
-  remove('contacts', id)
+  // Soft delete
+  const now = new Date().toISOString()
+  run('UPDATE contacts SET deleted_at = ? WHERE id = ?', [now, id])
 }
 
-export function searchContacts(query: string): Contact[] {
-  if (!query.trim()) return getAllContacts()
+export function hardDeleteContact(id: string): void {
+  run('DELETE FROM contacts WHERE id = ?', [id])
+}
+
+export function searchContacts(searchQuery: string): Contact[] {
+  if (!searchQuery.trim()) {
+    return getAllContacts()
+  }
   
-  const q = query.toLowerCase()
-  return getAllContacts().filter(c => 
-    c.name.toLowerCase().includes(q) ||
-    (c.company && c.company.toLowerCase().includes(q)) ||
-    (c.title && c.title.toLowerCase().includes(q)) ||
-    (c.notes && c.notes.toLowerCase().includes(q))
-  )
+  // Use LIKE search with case-insensitive matching
+  const pattern = `%${searchQuery.toLowerCase()}%`
+  return query<Contact>(`
+    SELECT * FROM contacts 
+    WHERE deleted_at IS NULL AND (
+      lower(name) LIKE ? OR 
+      lower(company) LIKE ? OR 
+      lower(title) LIKE ? OR 
+      lower(emails) LIKE ? OR 
+      lower(notes) LIKE ?
+    )
+    ORDER BY 
+      CASE WHEN lower(name) LIKE ? THEN 0 ELSE 1 END,
+      updated_at DESC
+    LIMIT 50
+  `, [pattern, pattern, pattern, pattern, pattern, pattern])
 }
 
 export function getContactsByTag(tagId: string): Contact[] {
-  const contactIds = getContactTags()
-    .filter(ct => ct.tag_id === tagId)
-    .map(ct => ct.contact_id)
-  
-  return getAllContacts().filter(c => contactIds.includes(c.id))
+  return query<Contact>(`
+    SELECT c.* FROM contacts c
+    JOIN contact_tags ct ON c.id = ct.contact_id
+    WHERE ct.tag_id = ? AND c.deleted_at IS NULL
+    ORDER BY c.updated_at DESC
+  `, [tagId])
 }
 
 export function addTagToContact(contactId: string, tagId: string): void {
-  addContactTag(contactId, tagId)
+  run(`
+    INSERT OR IGNORE INTO contact_tags (contact_id, tag_id)
+    VALUES (?, ?)
+  `, [contactId, tagId])
 }
 
 export function removeTagFromContact(contactId: string, tagId: string): void {
-  removeContactTag(contactId, tagId)
+  run('DELETE FROM contact_tags WHERE contact_id = ? AND tag_id = ?', [contactId, tagId])
 }
 
 export function getContactTags_(contactId: string): Tag[] {
-  const tagIds = getContactTags()
-    .filter(ct => ct.contact_id === contactId)
-    .map(ct => ct.tag_id)
-  
-  return getAllFromTable<Tag>('tags').filter(t => tagIds.includes(t.id))
+  return query<Tag>(`
+    SELECT t.* FROM tags t
+    JOIN contact_tags ct ON t.id = ct.tag_id
+    WHERE ct.contact_id = ?
+  `, [contactId])
 }
 
 export function checkDuplicateByEmail(email: string): Contact | null {
-  const contacts = getAllContacts()
-  const emailLower = email.toLowerCase()
+  if (!email) return null
   
-  for (const contact of contacts) {
-    try {
-      const emails = JSON.parse(contact.emails)
-      if (Array.isArray(emails) && emails.some((e: string) => e.toLowerCase() === emailLower)) {
-        return contact
-      }
-    } catch {
-      // Invalid JSON, skip
-    }
-  }
-  return null
+  // Search in emails JSON array
+  const pattern = `%${email}%`
+  return queryOne<Contact>(`
+    SELECT * FROM contacts 
+    WHERE deleted_at IS NULL AND emails LIKE ?
+    LIMIT 1
+  `, [pattern])
 }
 
+// Smart list queries
 export function getStaleContacts(days: number): Contact[] {
-  const cutoffDate = new Date()
-  cutoffDate.setDate(cutoffDate.getDate() - days)
-  const cutoff = cutoffDate.toISOString()
-  
-  return getAllContacts().filter(c => 
-    !c.last_contact_at || c.last_contact_at < cutoff
-  )
+  return query<Contact>(`
+    SELECT * FROM contacts 
+    WHERE deleted_at IS NULL 
+    AND (
+      last_contact_at IS NULL 
+      OR date(last_contact_at) < date('now', '-' || ? || ' days')
+    )
+    ORDER BY last_contact_at ASC NULLS FIRST
+  `, [days])
 }
 
 export function getRecentContacts(limit: number = 10): Contact[] {
-  return getAllContacts()
-    .filter(c => c.last_contact_at)
-    .sort((a, b) => (b.last_contact_at || '').localeCompare(a.last_contact_at || ''))
-    .slice(0, limit)
+  return query<Contact>(`
+    SELECT * FROM contacts 
+    WHERE deleted_at IS NULL 
+    ORDER BY updated_at DESC
+    LIMIT ?
+  `, [limit])
 }
 
+export function getHotListContacts(): Contact[] {
+  return query<Contact>(`
+    SELECT DISTINCT c.* FROM contacts c
+    JOIN contact_tags ct ON c.id = ct.contact_id
+    JOIN tags t ON ct.tag_id = t.id
+    WHERE c.deleted_at IS NULL 
+    AND t.name IN ('Hot Lead', 'Investor')
+    ORDER BY c.last_contact_at DESC NULLS LAST
+  `)
+}
+
+// Batch import contacts
+export function batchCreateContacts(contacts: Omit<Contact, 'id' | 'created_at' | 'updated_at'>[]): number {
+  const now = new Date().toISOString()
+  let count = 0
+  
+  transaction(() => {
+    for (const data of contacts) {
+      const id = uuidv4()
+      run(`
+        INSERT INTO contacts (id, name, company, title, emails, phones, location, source, notes, last_contact_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id,
+        data.name,
+        data.company || null,
+        data.title || null,
+        data.emails || '[]',
+        data.phones || '[]',
+        data.location || null,
+        data.source || null,
+        data.notes || null,
+        data.last_contact_at || null,
+        now,
+        now
+      ])
+      count++
+    }
+  })
+  
+  return count
+}
+
+// Get contact count
 export function getContactCount(): number {
-  return getAllContacts().length
+  const result = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM contacts WHERE deleted_at IS NULL')
+  return result?.count || 0
+}
+
+// Clean up old soft-deleted records (30 days retention)
+export function cleanupDeletedContacts(): number {
+  const result = run(`
+    DELETE FROM contacts 
+    WHERE deleted_at IS NOT NULL 
+    AND date(deleted_at) < date('now', '-30 days')
+  `)
+  return result.changes
 }

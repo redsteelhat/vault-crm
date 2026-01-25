@@ -1,0 +1,37 @@
+VaultCRM - Local-First Personal CRM
+End User License Agreement
+
+Copyright (c) 2026 VaultCRM. All rights reserved.
+
+This software is provided "as is" without warranty of any kind.
+
+By installing and using VaultCRM, you agree to the following terms:
+
+1. LICENSE GRANT
+   You are granted a non-exclusive, non-transferable license to use this software
+   on your personal or business computers.
+
+2. PRIVACY
+   VaultCRM is designed with privacy as a core principle:
+   - All data is stored locally on your device
+   - No data is transmitted to external servers
+   - Your contact information never leaves your computer
+   
+3. DATA OWNERSHIP
+   You retain full ownership of all data you enter into VaultCRM.
+   You are responsible for backing up your data regularly.
+
+4. LIMITATIONS
+   You may not:
+   - Reverse engineer, decompile, or disassemble the software
+   - Redistribute or resell the software
+   - Remove any proprietary notices or labels
+
+5. DISCLAIMER
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+   OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT.
+
+6. SUPPORT
+   For support, please visit: https://vaultcrm.app/support

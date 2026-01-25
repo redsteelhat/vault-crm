@@ -1,89 +1,103 @@
 import { readFileSync } from 'fs'
 import Papa from 'papaparse'
-import * as contactsRepo from '../database/repositories/contacts'
+import { createContact, checkDuplicateByEmail } from '../database/repositories/contacts'
 import type { ImportResult, CsvPreview } from '../database/types'
 
 export function previewCsv(filePath: string): CsvPreview {
-  const fileContent = readFileSync(filePath, 'utf-8')
-
-  const result = Papa.parse<Record<string, string>>(fileContent, {
+  const content = readFileSync(filePath, 'utf-8')
+  const result = Papa.parse(content, {
     header: true,
-    preview: 10,
-    skipEmptyLines: true
+    skipEmptyLines: true,
+    preview: 10 // Only preview first 10 rows
   })
 
   return {
     headers: result.meta.fields || [],
-    rows: result.data
+    rows: result.data as Record<string, string>[]
   }
 }
 
-export function importCsv(
+export async function importCsv(
   filePath: string,
   mapping: Record<string, string>
-): ImportResult {
-  const fileContent = readFileSync(filePath, 'utf-8')
-
-  const result = Papa.parse<Record<string, string>>(fileContent, {
+): Promise<ImportResult> {
+  const content = readFileSync(filePath, 'utf-8')
+  const result = Papa.parse(content, {
     header: true,
     skipEmptyLines: true
   })
 
-  const imported: string[] = []
-  const skipped: string[] = []
+  const rows = result.data as Record<string, string>[]
+  let imported = 0
+  let skipped = 0
   const errors: string[] = []
 
-  for (let i = 0; i < result.data.length; i++) {
-    const row = result.data[i]
-    const rowNum = i + 2
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const rowNum = i + 2 // +2 for header row and 0-based index
 
     try {
-      const name = mapping.name ? row[mapping.name]?.trim() : ''
-      const email = mapping.email ? row[mapping.email]?.trim() : ''
+      // Get mapped values
+      const name = mapping.name ? row[mapping.name]?.trim() : null
+      const email = mapping.email ? row[mapping.email]?.trim() : null
       const company = mapping.company ? row[mapping.company]?.trim() : null
       const title = mapping.title ? row[mapping.title]?.trim() : null
       const phone = mapping.phone ? row[mapping.phone]?.trim() : null
       const location = mapping.location ? row[mapping.location]?.trim() : null
-      const source = mapping.source ? row[mapping.source]?.trim() : 'CSV Import'
+      const source = mapping.source ? row[mapping.source]?.trim() : null
       const notes = mapping.notes ? row[mapping.notes]?.trim() : null
 
+      // Validate required fields
       if (!name) {
-        errors.push(`Row ${rowNum}: Name is required`)
+        errors.push(`Row ${rowNum}: Missing required field 'name'`)
+        skipped++
         continue
       }
 
+      // Check for duplicates by email
       if (email) {
-        const existing = contactsRepo.checkDuplicateByEmail(email)
+        const existing = checkDuplicateByEmail(email)
         if (existing) {
-          skipped.push(`Row ${rowNum}: Duplicate email (${email})`)
+          errors.push(`Row ${rowNum}: Duplicate email '${email}' - contact '${existing.name}' already exists`)
+          skipped++
           continue
         }
       }
 
-      const emails = email ? JSON.stringify([email]) : '[]'
-      const phones = phone ? JSON.stringify([phone]) : '[]'
-
-      contactsRepo.createContact({
+      // Create contact
+      createContact({
         name,
-        company,
-        title,
-        emails,
-        phones,
-        location,
-        source,
-        notes,
+        company: company || null,
+        title: title || null,
+        emails: email ? JSON.stringify([email]) : '[]',
+        phones: phone ? JSON.stringify([phone]) : '[]',
+        location: location || null,
+        source: source || 'CSV Import',
+        notes: notes || null,
         last_contact_at: null
       })
 
-      imported.push(name)
+      imported++
     } catch (error) {
-      errors.push(`Row ${rowNum}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      errors.push(`Row ${rowNum}: ${message}`)
+      skipped++
     }
   }
 
+  return { imported, skipped, errors }
+}
+
+// Validate CSV mapping
+export function validateMapping(mapping: Record<string, string>): { valid: boolean; errors: string[] } {
+  const errors: string[] = []
+  
+  if (!mapping.name) {
+    errors.push('Name field mapping is required')
+  }
+  
   return {
-    imported: imported.length,
-    skipped: skipped.length,
-    errors: [...errors, ...skipped]
+    valid: errors.length === 0,
+    errors
   }
 }

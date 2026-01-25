@@ -1,69 +1,118 @@
-import { v4 as uuid } from 'uuid'
-import { getAllFromTable, getById, insert, update, remove, saveDatabase } from '../connection'
+import { v4 as uuidv4 } from 'uuid'
+import { query, queryOne, run } from '../sqlite/connection'
 import type { Interaction, InteractionWithContact } from '../types'
-import { getContactById, updateContact } from './contacts'
 
 export function getInteractionsByContact(contactId: string): Interaction[] {
-  return getAllFromTable<Interaction>('interactions')
-    .filter(i => i.contact_id === contactId)
-    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+  return query<Interaction>(`
+    SELECT * FROM interactions 
+    WHERE contact_id = ? AND deleted_at IS NULL
+    ORDER BY occurred_at DESC
+  `, [contactId])
 }
 
 export function getInteractionById(id: string): Interaction | null {
-  return getById<Interaction>('interactions', id)
+  return queryOne<Interaction>(`
+    SELECT * FROM interactions 
+    WHERE id = ? AND deleted_at IS NULL
+  `, [id])
 }
 
 export function createInteraction(data: Omit<Interaction, 'id' | 'created_at'>): Interaction {
+  const id = uuidv4()
   const now = new Date().toISOString()
-  const interaction: Interaction = {
-    id: `interaction_${uuid()}`,
-    contact_id: data.contact_id,
-    type: data.type,
-    body: data.body,
-    occurred_at: data.occurred_at,
-    created_at: now
-  }
   
-  insert('interactions', interaction)
+  run(`
+    INSERT INTO interactions (id, contact_id, type, body, occurred_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `, [
+    id,
+    data.contact_id,
+    data.type,
+    data.body,
+    data.occurred_at || now,
+    now
+  ])
   
   // Update contact's last_contact_at
-  const contact = getContactById(data.contact_id)
-  if (contact && (!contact.last_contact_at || contact.last_contact_at < data.occurred_at)) {
-    updateContact(data.contact_id, { last_contact_at: data.occurred_at })
-  }
+  run(`
+    UPDATE contacts SET last_contact_at = ?, updated_at = ?
+    WHERE id = ?
+  `, [data.occurred_at || now, now, data.contact_id])
   
-  return interaction
+  return getInteractionById(id)!
 }
 
-export function updateInteraction(id: string, data: Partial<Interaction>): Interaction {
-  const updated = update<Interaction>('interactions', id, data)
-  if (!updated) throw new Error('Interaction not found')
-  return updated
+export function updateInteraction(id: string, data: Partial<Interaction>): Interaction | null {
+  const existing = getInteractionById(id)
+  if (!existing) return null
+  
+  const updates: string[] = []
+  const params: unknown[] = []
+  
+  if (data.type !== undefined) {
+    updates.push('type = ?')
+    params.push(data.type)
+  }
+  if (data.body !== undefined) {
+    updates.push('body = ?')
+    params.push(data.body)
+  }
+  if (data.occurred_at !== undefined) {
+    updates.push('occurred_at = ?')
+    params.push(data.occurred_at)
+  }
+  
+  if (updates.length === 0) return existing
+  
+  params.push(id)
+  run(`UPDATE interactions SET ${updates.join(', ')} WHERE id = ?`, params)
+  
+  return getInteractionById(id)
 }
 
 export function deleteInteraction(id: string): void {
-  remove('interactions', id)
+  const now = new Date().toISOString()
+  run('UPDATE interactions SET deleted_at = ? WHERE id = ?', [now, id])
+}
+
+export function hardDeleteInteraction(id: string): void {
+  run('DELETE FROM interactions WHERE id = ?', [id])
 }
 
 export function getRecentInteractions(limit: number = 20): InteractionWithContact[] {
-  const interactions = getAllFromTable<Interaction>('interactions')
-    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
-    .slice(0, limit)
-  
-  return interactions.map(i => {
-    const contact = getContactById(i.contact_id)
-    return {
-      ...i,
-      contact_name: contact?.name || 'Unknown',
-      contact_company: contact?.company || null
-    }
-  })
+  return query<InteractionWithContact>(`
+    SELECT i.*, c.name as contact_name, c.company as contact_company
+    FROM interactions i
+    JOIN contacts c ON i.contact_id = c.id
+    WHERE i.deleted_at IS NULL AND c.deleted_at IS NULL
+    ORDER BY i.occurred_at DESC
+    LIMIT ?
+  `, [limit])
 }
 
 export function getInteractionCount(): number {
-  return getAllFromTable<Interaction>('interactions').length
+  const result = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM interactions WHERE deleted_at IS NULL')
+  return result?.count || 0
 }
 
-export function getInteractionCountByContact(contactId: string): number {
-  return getInteractionsByContact(contactId).length
+export function getInteractionsByDateRange(startDate: string, endDate: string): InteractionWithContact[] {
+  return query<InteractionWithContact>(`
+    SELECT i.*, c.name as contact_name, c.company as contact_company
+    FROM interactions i
+    JOIN contacts c ON i.contact_id = c.id
+    WHERE i.deleted_at IS NULL 
+    AND c.deleted_at IS NULL
+    AND date(i.occurred_at) BETWEEN date(?) AND date(?)
+    ORDER BY i.occurred_at DESC
+  `, [startDate, endDate])
+}
+
+// Clean up old soft-deleted records (30 days retention)
+export function cleanupDeletedInteractions(): number {
+  const result = run(`
+    DELETE FROM interactions 
+    WHERE deleted_at IS NOT NULL 
+    AND date(deleted_at) < date('now', '-30 days')
+  `)
+  return result.changes
 }

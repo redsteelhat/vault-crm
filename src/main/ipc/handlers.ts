@@ -8,7 +8,7 @@ import * as followupsRepo from '../database/repositories/followups'
 import * as settingsRepo from '../database/repositories/settings'
 import { importCsv, previewCsv } from '../services/importer'
 import { exportToCsv, backupDatabase } from '../services/exporter'
-import { getDatabasePath } from '../database/connection'
+import { getDatabasePath } from '../database/sqlite/connection'
 
 export function registerAllHandlers(ipcMain: IpcMain): void {
   // === CONTACTS ===
@@ -56,6 +56,19 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
     return contactsRepo.checkDuplicateByEmail(email)
   })
 
+  // Additional contact handlers for smart lists
+  ipcMain.handle('contacts:getStale', (_, days: number) => {
+    return contactsRepo.getStaleContacts(days)
+  })
+
+  ipcMain.handle('contacts:getHotList', () => {
+    return contactsRepo.getHotListContacts()
+  })
+
+  ipcMain.handle('contacts:getCount', () => {
+    return contactsRepo.getContactCount()
+  })
+
   // === INTERACTIONS ===
   ipcMain.handle(IPC_CHANNELS.INTERACTIONS_GET_BY_CONTACT, (_, contactId: string) => {
     return interactionsRepo.getInteractionsByContact(contactId)
@@ -73,6 +86,14 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
     return interactionsRepo.deleteInteraction(id)
   })
 
+  ipcMain.handle('interactions:getRecent', (_, limit: number) => {
+    return interactionsRepo.getRecentInteractions(limit)
+  })
+
+  ipcMain.handle('interactions:getCount', () => {
+    return interactionsRepo.getInteractionCount()
+  })
+
   // === TAGS ===
   ipcMain.handle(IPC_CHANNELS.TAGS_GET_ALL, () => {
     return tagsRepo.getAllTags()
@@ -88,6 +109,10 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
 
   ipcMain.handle(IPC_CHANNELS.TAGS_DELETE, (_, id: string) => {
     return tagsRepo.deleteTag(id)
+  })
+
+  ipcMain.handle('tags:getWithCounts', () => {
+    return tagsRepo.getTagsWithCounts()
   })
 
   // === FOLLOW-UPS ===
@@ -129,6 +154,10 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
 
   ipcMain.handle(IPC_CHANNELS.FOLLOWUPS_DELETE, (_, id: string) => {
     return followupsRepo.deleteFollowup(id)
+  })
+
+  ipcMain.handle('followups:getOpenCount', () => {
+    return followupsRepo.getOpenFollowupsCount()
   })
 
   // === SETTINGS ===
