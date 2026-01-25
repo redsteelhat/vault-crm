@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   LayoutDashboard,
   Users,
@@ -7,8 +8,7 @@ import {
   Settings,
   Shield,
   ChevronLeft,
-  Sparkles,
-  Lock
+  Sparkles
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -17,16 +17,8 @@ import { useUIStore } from '@/stores/uiStore'
 import { useFollowUpStore } from '@/stores/followupStore'
 import { useEffect } from 'react'
 
-const navItems = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/contacts', icon: Users, label: 'Contacts' },
-  { path: '/followups', icon: CalendarClock, label: 'Follow-ups' },
-  { path: '/smart-lists', icon: Sparkles, label: 'Smart Lists' },
-  { path: '/import', icon: Upload, label: 'Import' },
-  { path: '/settings', icon: Settings, label: 'Settings' }
-]
-
 export function Sidebar() {
+  const { t } = useTranslation()
   const location = useLocation()
   const { sidebarOpen, toggleSidebar } = useUIStore()
   const { dueToday, overdue, fetchDueToday, fetchOverdue } = useFollowUpStore()
@@ -37,6 +29,15 @@ export function Sidebar() {
   }, [fetchDueToday, fetchOverdue])
 
   const followupCount = dueToday.length + overdue.length
+
+  const navItems = [
+    { path: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
+    { path: '/contacts', icon: Users, label: t('nav.contacts') },
+    { path: '/followups', icon: CalendarClock, label: t('nav.followups') },
+    { path: '/smart-lists', icon: Sparkles, label: t('nav.smartLists') },
+    { path: '/import', icon: Upload, label: t('nav.import') },
+    { path: '/settings', icon: Settings, label: t('nav.settings') }
+  ]
 
   return (
     <aside
@@ -116,7 +117,7 @@ export function Sidebar() {
         >
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           {sidebarOpen && (
-            <span className="text-xs text-muted-foreground">Data stored locally</span>
+            <span className="text-xs text-muted-foreground">{t('vault.localOnly', 'Data stored locally')}</span>
           )}
         </div>
       </div>

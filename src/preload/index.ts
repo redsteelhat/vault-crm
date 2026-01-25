@@ -135,7 +135,8 @@ const api = {
   app: {
     getVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
     getPlatform: (): Promise<string> => ipcRenderer.invoke('app:getPlatform'),
-    getDataPath: (): Promise<string> => ipcRenderer.invoke('app:getDataPath')
+    getDataPath: (): Promise<string> => ipcRenderer.invoke('app:getDataPath'),
+    getLocale: (): Promise<string> => ipcRenderer.invoke('app:getLocale')
   },
 
   // Diagnostics

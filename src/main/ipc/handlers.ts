@@ -228,6 +228,10 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
     return getDatabasePath()
   })
 
+  ipcMain.handle('app:getLocale', () => {
+    return app.getLocale()
+  })
+
   // === DIAGNOSTICS ===
   ipcMain.handle('diagnostics:getSummary', () => {
     return getDiagnosticsSummary()

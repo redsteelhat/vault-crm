@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Users, CalendarClock, AlertTriangle, Clock, Plus, ArrowRight } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,6 +12,7 @@ import { useFollowUpStore } from '@/stores/followupStore'
 import { formatRelativeDate, getDueDateLabel } from '@/lib/utils'
 
 export function Dashboard() {
+  const { t } = useTranslation()
   const { contacts, fetchContacts } = useContactStore()
   const { dueToday, overdue, upcoming, fetchDueToday, fetchOverdue, fetchUpcoming, markDone } =
     useFollowUpStore()
@@ -24,28 +26,28 @@ export function Dashboard() {
 
   const stats = [
     {
-      title: 'Total Contacts',
+      title: t('dashboard.totalContacts'),
       value: contacts.length,
       icon: Users,
       color: 'text-blue-500',
       bg: 'bg-blue-500/10'
     },
     {
-      title: 'Due Today',
+      title: t('dashboard.dueToday'),
       value: dueToday.length,
       icon: CalendarClock,
       color: 'text-amber-500',
       bg: 'bg-amber-500/10'
     },
     {
-      title: 'Overdue',
+      title: t('dashboard.overdue'),
       value: overdue.length,
       icon: AlertTriangle,
       color: 'text-red-500',
       bg: 'bg-red-500/10'
     },
     {
-      title: 'Upcoming (7 days)',
+      title: t('dashboard.upcoming'),
       value: upcoming.length,
       icon: Clock,
       color: 'text-emerald-500',
@@ -57,7 +59,7 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col h-screen">
-      <Header title="Dashboard" description="Your relationship management at a glance" />
+      <Header title={t('dashboard.title')} description={t('dashboard.description')} />
 
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-6">
@@ -84,10 +86,10 @@ export function Dashboard() {
             {/* Follow-ups Queue */}
             <Card className="border-none shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-lg font-semibold">Follow-up Queue</CardTitle>
+                <CardTitle className="text-lg font-semibold">{t('dashboard.followupQueue')}</CardTitle>
                 <Link to="/followups">
                   <Button variant="ghost" size="sm" className="text-muted-foreground">
-                    View all <ArrowRight className="ml-1 h-4 w-4" />
+                    {t('dashboard.viewAll')} <ArrowRight className="ml-1 h-4 w-4" />
                   </Button>
                 </Link>
               </CardHeader>
@@ -95,9 +97,9 @@ export function Dashboard() {
                 {allPending.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center">
                     <CalendarClock className="h-12 w-12 text-muted-foreground/30 mb-3" />
-                    <p className="text-muted-foreground">No pending follow-ups</p>
+                    <p className="text-muted-foreground">{t('dashboard.noFollowups')}</p>
                     <p className="text-sm text-muted-foreground/70">
-                      Create follow-ups from contact pages
+                      {t('dashboard.noFollowupsDesc')}
                     </p>
                   </div>
                 ) : (
@@ -130,7 +132,7 @@ export function Dashboard() {
                               onClick={() => markDone(followup.id)}
                               className="text-xs"
                             >
-                              Done
+                              {t('dashboard.markDone')}
                             </Button>
                           </div>
                         </div>
@@ -144,10 +146,10 @@ export function Dashboard() {
             {/* Recent Contacts */}
             <Card className="border-none shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-lg font-semibold">Recent Contacts</CardTitle>
+                <CardTitle className="text-lg font-semibold">{t('dashboard.recentContacts')}</CardTitle>
                 <Link to="/contacts">
                   <Button variant="ghost" size="sm" className="text-muted-foreground">
-                    View all <ArrowRight className="ml-1 h-4 w-4" />
+                    {t('dashboard.viewAll')} <ArrowRight className="ml-1 h-4 w-4" />
                   </Button>
                 </Link>
               </CardHeader>
@@ -155,10 +157,10 @@ export function Dashboard() {
                 {contacts.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center">
                     <Users className="h-12 w-12 text-muted-foreground/30 mb-3" />
-                    <p className="text-muted-foreground">No contacts yet</p>
+                    <p className="text-muted-foreground">{t('dashboard.noRecentContacts')}</p>
                     <Link to="/import">
                       <Button variant="outline" size="sm" className="mt-3">
-                        <Plus className="h-4 w-4 mr-1" /> Import contacts
+                        <Plus className="h-4 w-4 mr-1" /> {t('contacts.importContacts')}
                       </Button>
                     </Link>
                   </div>
@@ -199,20 +201,20 @@ export function Dashboard() {
           {/* Quick Actions */}
           <Card className="border-none shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
+              <CardTitle className="text-lg font-semibold">{t('common.quickActions', 'Quick Actions')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-3">
                 <Link to="/contacts">
                   <Button>
-                    <Plus className="h-4 w-4 mr-2" /> Add Contact
+                    <Plus className="h-4 w-4 mr-2" /> {t('contacts.addContact')}
                   </Button>
                 </Link>
                 <Link to="/import">
-                  <Button variant="outline">Import CSV</Button>
+                  <Button variant="outline">{t('import.title')}</Button>
                 </Link>
                 <Link to="/followups">
-                  <Button variant="outline">View Follow-ups</Button>
+                  <Button variant="outline">{t('followups.title')}</Button>
                 </Link>
               </div>
             </CardContent>

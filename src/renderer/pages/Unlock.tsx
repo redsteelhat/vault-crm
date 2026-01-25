@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Shield, Lock, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +12,7 @@ interface UnlockProps {
 }
 
 export function Unlock({ onUnlock }: UnlockProps) {
+  const { t } = useTranslation()
   const [isSetup, setIsSetup] = useState<boolean | null>(null)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -32,10 +34,10 @@ export function Unlock({ onUnlock }: UnlockProps) {
 
   const validatePassword = (pwd: string): string[] => {
     const errors: string[] = []
-    if (pwd.length < 8) errors.push('At least 8 characters')
-    if (!/[A-Z]/.test(pwd)) errors.push('One uppercase letter')
-    if (!/[a-z]/.test(pwd)) errors.push('One lowercase letter')
-    if (!/[0-9]/.test(pwd)) errors.push('One number')
+    if (pwd.length < 8) errors.push(t('vault.req8chars', 'At least 8 characters'))
+    if (!/[A-Z]/.test(pwd)) errors.push(t('vault.reqUppercase', 'One uppercase letter'))
+    if (!/[a-z]/.test(pwd)) errors.push(t('vault.reqLowercase', 'One lowercase letter'))
+    if (!/[0-9]/.test(pwd)) errors.push(t('vault.reqNumber', 'One number'))
     return errors
   }
 
@@ -44,12 +46,12 @@ export function Unlock({ onUnlock }: UnlockProps) {
     
     const validationErrors = validatePassword(password)
     if (validationErrors.length > 0) {
-      setError('Password requirements not met')
+      setError(t('vault.passwordReqNotMet', 'Password requirements not met'))
       return
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
+      setError(t('vault.passwordsDontMatch'))
       return
     }
 
@@ -59,10 +61,10 @@ export function Unlock({ onUnlock }: UnlockProps) {
       if (result.success) {
         onUnlock()
       } else {
-        setError(result.error || 'Setup failed')
+        setError(result.error || t('errors.generic'))
       }
-    } catch (err) {
-      setError('An unexpected error occurred')
+    } catch {
+      setError(t('errors.generic'))
     } finally {
       setIsLoading(false)
     }
@@ -72,7 +74,7 @@ export function Unlock({ onUnlock }: UnlockProps) {
     setError('')
     
     if (!password) {
-      setError('Please enter your password')
+      setError(t('vault.enterPassword'))
       return
     }
 
@@ -83,15 +85,15 @@ export function Unlock({ onUnlock }: UnlockProps) {
         onUnlock()
       } else {
         if (result.error === 'INVALID_PASSWORD') {
-          setError('Incorrect password')
+          setError(t('vault.wrongPassword'))
         } else if (result.error === 'DECRYPTION_FAILED') {
-          setError('Failed to decrypt vault. Wrong password or corrupted data.')
+          setError(t('vault.decryptionFailed', 'Failed to decrypt vault. Wrong password or corrupted data.'))
         } else {
-          setError(result.error || 'Unlock failed')
+          setError(result.error || t('errors.generic'))
         }
       }
-    } catch (err) {
-      setError('An unexpected error occurred')
+    } catch {
+      setError(t('errors.generic'))
     } finally {
       setIsLoading(false)
     }
@@ -131,21 +133,21 @@ export function Unlock({ onUnlock }: UnlockProps) {
               <Shield className="h-10 w-10 text-white" />
             </div>
           </motion.div>
-          <h1 className="mt-6 text-3xl font-bold text-white">VaultCRM</h1>
+          <h1 className="mt-6 text-3xl font-bold text-white">{t('vault.title')}</h1>
           <p className="mt-2 text-slate-400">
-            {isSetup ? 'Welcome back' : 'Secure your data'}
+            {isSetup ? t('vault.welcomeBack', 'Welcome back') : t('vault.subtitle')}
           </p>
         </div>
 
         <Card className="border-slate-800 bg-slate-900/50 backdrop-blur-sm shadow-2xl">
           <CardHeader className="text-center">
             <CardTitle className="text-xl text-white">
-              {isSetup ? 'Unlock Your Vault' : 'Create Master Password'}
+              {isSetup ? t('vault.unlock') : t('vault.setupTitle')}
             </CardTitle>
             <CardDescription>
               {isSetup
-                ? 'Enter your master password to access your data'
-                : 'This password encrypts all your data locally'}
+                ? t('vault.enterPassword')
+                : t('vault.setupDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -153,9 +155,9 @@ export function Unlock({ onUnlock }: UnlockProps) {
               <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
                 <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
                 <div className="text-sm">
-                  <p className="font-medium text-amber-500">Existing data found</p>
+                  <p className="font-medium text-amber-500">{t('vault.legacyDataFound', 'Existing data found')}</p>
                   <p className="text-slate-400">
-                    Your previous data will be encrypted and migrated after setup.
+                    {t('vault.legacyDataDesc', 'Your previous data will be encrypted and migrated after setup.')}
                   </p>
                 </div>
               </div>
@@ -163,7 +165,7 @@ export function Unlock({ onUnlock }: UnlockProps) {
 
             <div className="space-y-2">
               <Label htmlFor="password" className="text-slate-300">
-                Master Password
+                {t('settings.masterPassword')}
               </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
@@ -173,7 +175,7 @@ export function Unlock({ onUnlock }: UnlockProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (isSetup ? handleUnlock() : null)}
-                  placeholder={isSetup ? 'Enter password' : 'Create a strong password'}
+                  placeholder={isSetup ? t('vault.enterPasswordPlaceholder', 'Enter password') : t('vault.createPassword')}
                   className="pl-10 pr-10 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                   autoFocus
                 />
@@ -191,7 +193,7 @@ export function Unlock({ onUnlock }: UnlockProps) {
               <>
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword" className="text-slate-300">
-                    Confirm Password
+                    {t('vault.confirmPassword')}
                   </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
@@ -201,7 +203,7 @@ export function Unlock({ onUnlock }: UnlockProps) {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSetup()}
-                      placeholder="Confirm your password"
+                      placeholder={t('vault.confirmPasswordPlaceholder', 'Confirm your password')}
                       className="pl-10 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                     />
                   </div>
@@ -209,13 +211,13 @@ export function Unlock({ onUnlock }: UnlockProps) {
 
                 {/* Password requirements */}
                 <div className="space-y-2">
-                  <p className="text-xs text-slate-400 font-medium">Password requirements:</p>
+                  <p className="text-xs text-slate-400 font-medium">{t('vault.passwordRequirements', 'Password requirements')}:</p>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { label: '8+ characters', check: password.length >= 8 },
-                      { label: 'Uppercase', check: /[A-Z]/.test(password) },
-                      { label: 'Lowercase', check: /[a-z]/.test(password) },
-                      { label: 'Number', check: /[0-9]/.test(password) }
+                      { label: t('vault.req8chars', '8+ characters'), check: password.length >= 8 },
+                      { label: t('vault.reqUppercase', 'Uppercase'), check: /[A-Z]/.test(password) },
+                      { label: t('vault.reqLowercase', 'Lowercase'), check: /[a-z]/.test(password) },
+                      { label: t('vault.reqNumber', 'Number'), check: /[0-9]/.test(password) }
                     ].map((req) => (
                       <div
                         key={req.label}
@@ -258,25 +260,25 @@ export function Unlock({ onUnlock }: UnlockProps) {
               {isLoading ? (
                 <div className="flex items-center gap-2">
                   <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  {isSetup ? 'Unlocking...' : 'Setting up...'}
+                  {isSetup ? t('vault.unlocking') : t('vault.creating')}
                 </div>
               ) : isSetup ? (
-                'Unlock Vault'
+                t('vault.unlock')
               ) : (
-                'Create Vault'
+                t('vault.createVault')
               )}
             </Button>
 
             {isSetup && (
               <p className="text-center text-xs text-slate-500">
-                Your data is encrypted with AES-256-GCM
+                {t('settings.encryptionInfo')}
               </p>
             )}
           </CardContent>
         </Card>
 
         <p className="mt-6 text-center text-xs text-slate-600">
-          All data stays on your device. No cloud, no tracking.
+          {t('vault.localOnly', 'All data stays on your device. No cloud, no tracking.')}
         </p>
       </motion.div>
     </div>

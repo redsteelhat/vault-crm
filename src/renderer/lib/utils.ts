@@ -1,69 +1,82 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { format, formatDistanceToNow, differenceInDays, Locale } from 'date-fns'
+import { enUS, tr, de, fr } from 'date-fns/locale'
+import i18n from '@/i18n'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Get date-fns locale based on current i18n language
+function getDateLocale(): Locale {
+  const lang = i18n.language?.split('-')[0] || 'en'
+  const locales: Record<string, Locale> = {
+    en: enUS,
+    tr: tr,
+    de: de,
+    fr: fr
+  }
+  return locales[lang] || enUS
+}
+
 export function formatDate(date: string | Date | null): string {
-  if (!date) return 'Never'
+  if (!date) return i18n.t('common.never', 'Never')
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })
+  return format(d, 'PP', { locale: getDateLocale() })
 }
 
 export function formatDateTime(date: string | Date | null): string {
-  if (!date) return 'Never'
+  if (!date) return i18n.t('common.never', 'Never')
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
+  return format(d, 'PPp', { locale: getDateLocale() })
 }
 
 export function formatRelativeDate(date: string | Date | null): string {
-  if (!date) return 'Never'
+  if (!date) return i18n.t('common.never', 'Never')
   const d = typeof date === 'string' ? new Date(date) : date
   const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  const diffDays = differenceInDays(now, d)
 
-  if (diffDays === 0) return 'Today'
-  if (diffDays === 1) return 'Yesterday'
-  if (diffDays < 7) return `${diffDays} days ago`
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
-  return `${Math.floor(diffDays / 365)} years ago`
+  if (diffDays === 0) return i18n.t('common.today', 'Today')
+  if (diffDays === 1) return i18n.t('common.yesterday', 'Yesterday')
+  
+  return formatDistanceToNow(d, { 
+    addSuffix: true, 
+    locale: getDateLocale() 
+  })
 }
 
 export function getDaysUntil(date: string | Date): number {
   const d = typeof date === 'string' ? new Date(date) : date
   const now = new Date()
   now.setHours(0, 0, 0, 0)
-  d.setHours(0, 0, 0, 0)
-  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  const target = new Date(d)
+  target.setHours(0, 0, 0, 0)
+  return differenceInDays(target, now)
 }
 
 export function getDueDateLabel(date: string | Date): { label: string; variant: 'destructive' | 'warning' | 'default' } {
   const days = getDaysUntil(date)
+  const t = i18n.t.bind(i18n)
   
   if (days < 0) {
-    return { label: `${Math.abs(days)} days overdue`, variant: 'destructive' }
+    return { 
+      label: t('followups.daysOverdue', '{{count}} days overdue', { count: Math.abs(days) }), 
+      variant: 'destructive' 
+    }
   }
   if (days === 0) {
-    return { label: 'Due today', variant: 'warning' }
+    return { label: t('followups.dueToday', 'Due today'), variant: 'warning' }
   }
   if (days === 1) {
-    return { label: 'Due tomorrow', variant: 'warning' }
+    return { label: t('followups.dueTomorrow', 'Due tomorrow'), variant: 'warning' }
   }
   if (days <= 7) {
-    return { label: `Due in ${days} days`, variant: 'default' }
+    return { 
+      label: t('followups.dueInDays', 'Due in {{count}} days', { count: days }), 
+      variant: 'default' 
+    }
   }
   return { label: formatDate(date), variant: 'default' }
 }

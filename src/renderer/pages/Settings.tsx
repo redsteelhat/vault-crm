@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Download, Database, Moon, Sun, Shield, HardDrive, Info, Lock, Clock, Eye, EyeOff, Key, RefreshCw, MessageCircle, Bug, FileText, Radio } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Download, Database, Moon, Sun, Shield, HardDrive, Info, Lock, Clock, Eye, EyeOff, Key, RefreshCw, MessageCircle, Bug, FileText, Radio, Globe } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,8 +14,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useUIStore } from '@/stores/uiStore'
 import { useContactStore } from '@/stores/contactStore'
 import { useToast } from '@/hooks/useToast'
+import { supportedLanguages, changeLanguage, getCurrentLanguage, type SupportedLanguage } from '@/i18n'
 
 export function Settings() {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const { theme, setTheme } = useUIStore()
   const { contacts } = useContactStore()
@@ -27,6 +30,7 @@ export function Settings() {
   const [isExporting, setIsExporting] = useState(false)
   const [idleTimeout, setIdleTimeout] = useState(15)
   const [lockOnMinimize, setLockOnMinimize] = useState(false)
+  const [currentLanguage, setCurrentLanguage] = useState<SupportedLanguage>(getCurrentLanguage())
   
   // Password change dialog
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
@@ -219,27 +223,68 @@ export function Settings() {
       ])
       if (path) {
         await window.api.export.backup(path)
-        toast({ title: 'Backup created successfully', variant: 'success' })
+        toast({ title: t('settings.backupSuccess'), variant: 'success' })
       }
     } catch {
-      toast({ title: 'Backup failed', variant: 'destructive' })
+      toast({ title: t('errors.backupFailed'), variant: 'destructive' })
     }
+  }
+
+  const handleLanguageChange = async (lang: string) => {
+    const newLang = lang as SupportedLanguage
+    setCurrentLanguage(newLang)
+    await changeLanguage(newLang)
+    toast({ title: t('settings.languageChanged', { lang: supportedLanguages.find(l => l.code === newLang)?.nativeName }) })
   }
 
   return (
     <div className="flex flex-col h-screen">
-      <Header title="Settings" description="Manage your preferences and data" />
+      <Header title={t('settings.title')} description={t('settings.description')} />
 
       <ScrollArea className="flex-1">
         <div className="p-6 max-w-3xl mx-auto space-y-6">
+          {/* Language */}
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="h-5 w-5" />
+                {t('settings.language')}
+              </CardTitle>
+              <CardDescription>{t('settings.languageDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">{t('settings.language')}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.languageDesc')}</p>
+                </div>
+                <Select value={currentLanguage} onValueChange={handleLanguageChange}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {supportedLanguages.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        <span className="flex items-center gap-2">
+                          <span>{lang.flag}</span>
+                          <span>{lang.nativeName}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Vault Security */}
           <Card className="border-none shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Lock className="h-5 w-5" />
-                Vault Security
+                {t('settings.vault')}
               </CardTitle>
-              <CardDescription>Manage your vault password and security settings</CardDescription>
+              <CardDescription>{t('settings.vaultDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
