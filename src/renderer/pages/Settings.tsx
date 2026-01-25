@@ -289,55 +289,55 @@ export function Settings() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">Master Password</p>
+                  <p className="font-medium">{t('settings.masterPassword')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Change your vault encryption password
+                    {t('settings.masterPasswordDesc')}
                   </p>
                 </div>
                 <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
                   <DialogTrigger asChild>
                     <Button variant="outline">
-                      <Key className="h-4 w-4 mr-2" /> Change
+                      <Key className="h-4 w-4 mr-2" /> {t('settings.changePassword')}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Change Master Password</DialogTitle>
+                      <DialogTitle>{t('settings.changePassword')}</DialogTitle>
                       <DialogDescription>
-                        Enter your current password and choose a new one.
+                        {t('settings.masterPasswordDesc')}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                       <div className="space-y-2">
-                        <Label htmlFor="current">Current Password</Label>
+                        <Label htmlFor="current">{t('settings.currentPassword')}</Label>
                         <div className="relative">
                           <Input
                             id="current"
                             type={showPasswords ? 'text' : 'password'}
                             value={currentPassword}
                             onChange={(e) => setCurrentPassword(e.target.value)}
-                            placeholder="Enter current password"
+                            placeholder={t('settings.currentPassword')}
                           />
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="new">New Password</Label>
+                        <Label htmlFor="new">{t('settings.newPassword')}</Label>
                         <Input
                           id="new"
                           type={showPasswords ? 'text' : 'password'}
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="Enter new password"
+                          placeholder={t('settings.newPassword')}
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="confirm">Confirm New Password</Label>
+                        <Label htmlFor="confirm">{t('settings.confirmPassword')}</Label>
                         <Input
                           id="confirm"
                           type={showPasswords ? 'text' : 'password'}
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Confirm new password"
+                          placeholder={t('settings.confirmPassword')}
                         />
                       </div>
                       <Button
@@ -347,15 +347,15 @@ export function Settings() {
                         className="text-muted-foreground"
                       >
                         {showPasswords ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
-                        {showPasswords ? 'Hide' : 'Show'} passwords
+                        {showPasswords ? t('common.close') : t('common.edit')}
                       </Button>
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setShowPasswordDialog(false)}>
-                        Cancel
+                        {t('common.cancel')}
                       </Button>
                       <Button onClick={handleChangePassword} disabled={isChangingPassword}>
-                        {isChangingPassword ? 'Changing...' : 'Change Password'}
+                        {isChangingPassword ? t('common.loading') : t('settings.changePassword')}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -364,9 +364,9 @@ export function Settings() {
 
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">Auto-Lock Timeout</p>
+                  <p className="font-medium">{t('settings.idleTimeout')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Lock vault after inactivity
+                    {t('settings.idleTimeoutDesc')}
                   </p>
                 </div>
                 <Select value={idleTimeout.toString()} onValueChange={handleIdleTimeoutChange}>
@@ -374,20 +374,20 @@ export function Settings() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="5">5 minutes</SelectItem>
-                    <SelectItem value="15">15 minutes</SelectItem>
-                    <SelectItem value="30">30 minutes</SelectItem>
-                    <SelectItem value="60">1 hour</SelectItem>
-                    <SelectItem value="0">Never</SelectItem>
+                    <SelectItem value="5">5 {t('settings.minutes')}</SelectItem>
+                    <SelectItem value="15">15 {t('settings.minutes')}</SelectItem>
+                    <SelectItem value="30">30 {t('settings.minutes')}</SelectItem>
+                    <SelectItem value="60">1 {t('settings.hour')}</SelectItem>
+                    <SelectItem value="0">{t('settings.never')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">Lock on Minimize</p>
+                  <p className="font-medium">{t('settings.lockOnMinimize')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Lock vault when window loses focus
+                    {t('settings.lockOnMinimizeDesc')}
                   </p>
                 </div>
                 <Button
@@ -395,19 +395,19 @@ export function Settings() {
                   size="sm"
                   onClick={handleLockOnMinimizeChange}
                 >
-                  {lockOnMinimize ? 'Enabled' : 'Disabled'}
+                  {lockOnMinimize ? t('settings.enabled') : t('settings.disabled')}
                 </Button>
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
                 <div>
-                  <p className="font-medium text-amber-500">Lock Now</p>
+                  <p className="font-medium text-amber-500">{t('settings.lockNow')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Immediately lock your vault
+                    {t('settings.lockNowDesc')}
                   </p>
                 </div>
                 <Button variant="destructive" size="sm" onClick={handleLockNow}>
-                  <Lock className="h-4 w-4 mr-2" /> Lock Vault
+                  <Lock className="h-4 w-4 mr-2" /> {t('nav.lock')}
                 </Button>
               </div>
             </CardContent>
@@ -418,15 +418,15 @@ export function Settings() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Sun className="h-5 w-5" />
-                Appearance
+                {t('settings.appearance')}
               </CardTitle>
-              <CardDescription>Customize how VaultCRM looks</CardDescription>
+              <CardDescription>{t('settings.appearanceDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">Theme</p>
-                  <p className="text-sm text-muted-foreground">Choose your preferred color scheme</p>
+                  <p className="font-medium">{t('settings.theme')}</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.themeDesc')}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -434,14 +434,14 @@ export function Settings() {
                     size="sm"
                     onClick={() => setTheme('light')}
                   >
-                    <Sun className="h-4 w-4 mr-1" /> Light
+                    <Sun className="h-4 w-4 mr-1" /> {t('settings.light')}
                   </Button>
                   <Button
                     variant={theme === 'dark' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setTheme('dark')}
                   >
-                    <Moon className="h-4 w-4 mr-1" /> Dark
+                    <Moon className="h-4 w-4 mr-1" /> {t('settings.dark')}
                   </Button>
                 </div>
               </div>
@@ -453,33 +453,33 @@ export function Settings() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Database className="h-5 w-5" />
-                Data Management
+                {t('settings.dataManagement')}
               </CardTitle>
-              <CardDescription>Export and backup your data</CardDescription>
+              <CardDescription>{t('settings.dataManagementDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">Export Contacts (CSV)</p>
+                  <p className="font-medium">{t('settings.exportCsv')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Download all {contacts.length} contacts as a CSV file
+                    {t('settings.exportCsvDesc')} ({contacts.length})
                   </p>
                 </div>
                 <Button variant="outline" onClick={handleExportCsv} disabled={isExporting}>
                   <Download className="h-4 w-4 mr-2" />
-                  {isExporting ? 'Exporting...' : 'Export'}
+                  {isExporting ? t('settings.exporting') : t('settings.export')}
                 </Button>
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">Backup Database</p>
+                  <p className="font-medium">{t('settings.backupDatabase')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Create a full encrypted backup
+                    {t('settings.backupDatabaseDesc')}
                   </p>
                 </div>
                 <Button variant="outline" onClick={handleBackup}>
-                  <HardDrive className="h-4 w-4 mr-2" /> Backup
+                  <HardDrive className="h-4 w-4 mr-2" /> {t('settings.backup')}
                 </Button>
               </div>
             </CardContent>
@@ -490,9 +490,9 @@ export function Settings() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                Privacy & Encryption
+                {t('settings.privacy')}
               </CardTitle>
-              <CardDescription>Your data is protected</CardDescription>
+              <CardDescription>{t('settings.privacyDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -501,21 +501,20 @@ export function Settings() {
                     <Shield className="h-4 w-4 text-emerald-500" />
                   </div>
                   <div>
-                    <p className="font-medium text-emerald-500">AES-256-GCM Encryption</p>
+                    <p className="font-medium text-emerald-500">{t('settings.encryptionInfo')}</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      All your data is encrypted with military-grade encryption. Your master password 
-                      never leaves your device.
+                      {t('settings.encryptionInfoDesc')}
                     </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Data Location</p>
+                    <p className="text-sm text-muted-foreground">{t('settings.dataLocation')}</p>
                     <p className="text-xs font-mono mt-1 break-all">{appInfo.dataPath}</p>
                   </div>
                   <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Encryption</p>
+                    <p className="text-sm text-muted-foreground">{t('settings.encryption')}</p>
                     <Badge variant="secondary" className="mt-1">
                       AES-256-GCM + PBKDF2
                     </Badge>
@@ -530,29 +529,29 @@ export function Settings() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <RefreshCw className="h-5 w-5" />
-                Updates
+                {t('settings.updates')}
               </CardTitle>
-              <CardDescription>Keep VaultCRM up to date</CardDescription>
+              <CardDescription>{t('settings.updatesDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">Check for Updates</p>
+                  <p className="font-medium">{t('settings.checkForUpdates')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Current version: {appInfo.version || '1.0.0'}
+                    {t('settings.currentVersion')}: {appInfo.version || '1.0.0'}
                   </p>
                 </div>
                 <Button variant="outline" onClick={handleCheckForUpdates} disabled={isCheckingUpdate}>
                   <RefreshCw className={`h-4 w-4 mr-2 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
-                  {isCheckingUpdate ? 'Checking...' : 'Check Now'}
+                  {isCheckingUpdate ? t('settings.checking') : t('settings.checkForUpdates')}
                 </Button>
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">Update Channel</p>
+                  <p className="font-medium">{t('settings.updates')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Beta channel includes early features
+                    Beta / Stable
                   </p>
                 </div>
                 <Select value={updateChannel} onValueChange={(v) => handleUpdateChannelChange(v as 'stable' | 'beta')}>
@@ -576,9 +575,9 @@ export function Settings() {
 
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">Auto-Check Updates</p>
+                  <p className="font-medium">{t('settings.checkForUpdates')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Check for updates on startup
+                    {t('settings.updatesDesc')}
                   </p>
                 </div>
                 <Button
@@ -586,7 +585,7 @@ export function Settings() {
                   size="sm"
                   onClick={handleAutoCheckChange}
                 >
-                  {autoCheck ? 'Enabled' : 'Disabled'}
+                  {autoCheck ? t('settings.enabled') : t('settings.disabled')}
                 </Button>
               </div>
             </CardContent>
@@ -597,77 +596,77 @@ export function Settings() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bug className="h-5 w-5" />
-                Diagnostics & Support
+                {t('settings.diagnostics')}
               </CardTitle>
-              <CardDescription>Troubleshooting and feedback</CardDescription>
+              <CardDescription>{t('settings.diagnosticsDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">Export Diagnostics</p>
+                  <p className="font-medium">{t('settings.exportDiagnostics')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Export system info for troubleshooting (no personal data)
+                    {t('settings.exportDiagnosticsDesc')}
                   </p>
                 </div>
                 <Button variant="outline" onClick={handleExportDiagnostics} disabled={isExportingDiagnostics}>
                   <FileText className="h-4 w-4 mr-2" />
-                  {isExportingDiagnostics ? 'Exporting...' : 'Export'}
+                  {isExportingDiagnostics ? t('settings.exporting') : t('settings.export')}
                 </Button>
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div>
-                  <p className="font-medium">Send Feedback</p>
+                  <p className="font-medium">{t('settings.sendFeedback')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Report bugs, request features, or share your thoughts
+                    {t('settings.diagnosticsDesc')}
                   </p>
                 </div>
                 <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
                   <DialogTrigger asChild>
                     <Button variant="outline">
-                      <MessageCircle className="h-4 w-4 mr-2" /> Feedback
+                      <MessageCircle className="h-4 w-4 mr-2" /> {t('settings.sendFeedback')}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Send Feedback</DialogTitle>
+                      <DialogTitle>{t('settings.sendFeedback')}</DialogTitle>
                       <DialogDescription>
-                        We appreciate your feedback! Let us know how we can improve.
+                        {t('settings.diagnosticsDesc')}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                       <div className="space-y-2">
-                        <Label>Feedback Type</Label>
+                        <Label>{t('settings.feedbackType')}</Label>
                         <div className="flex gap-2">
                           <Button
                             size="sm"
                             variant={feedbackType === 'bug' ? 'default' : 'outline'}
                             onClick={() => setFeedbackType('bug')}
                           >
-                            <Bug className="h-4 w-4 mr-1" /> Bug Report
+                            <Bug className="h-4 w-4 mr-1" /> {t('settings.bugReport')}
                           </Button>
                           <Button
                             size="sm"
                             variant={feedbackType === 'feature' ? 'default' : 'outline'}
                             onClick={() => setFeedbackType('feature')}
                           >
-                            Feature Request
+                            {t('settings.featureRequest')}
                           </Button>
                           <Button
                             size="sm"
                             variant={feedbackType === 'general' ? 'default' : 'outline'}
                             onClick={() => setFeedbackType('general')}
                           >
-                            General
+                            {t('settings.generalFeedback')}
                           </Button>
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="feedback">Your Feedback</Label>
+                        <Label htmlFor="feedback">{t('settings.feedbackMessage')}</Label>
                         <textarea
                           id="feedback"
                           className="w-full h-32 p-3 rounded-md border bg-background resize-none"
-                          placeholder="Describe your feedback..."
+                          placeholder={t('settings.feedbackPlaceholder')}
                           value={feedbackText}
                           onChange={(e) => setFeedbackText(e.target.value)}
                         />
@@ -681,35 +680,20 @@ export function Settings() {
                           className="rounded"
                         />
                         <Label htmlFor="include-diagnostics" className="text-sm">
-                          Include system diagnostics (no personal data)
+                          {t('settings.exportDiagnosticsDesc')}
                         </Label>
                       </div>
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setShowFeedbackDialog(false)}>
-                        Cancel
+                        {t('common.cancel')}
                       </Button>
                       <Button onClick={handleSendFeedback} disabled={!feedbackText.trim()}>
-                        <MessageCircle className="h-4 w-4 mr-2" /> Send Feedback
+                        <MessageCircle className="h-4 w-4 mr-2" /> {t('common.submit')}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-              </div>
-
-              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                <p className="text-sm text-blue-500 font-medium">Need Help?</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Visit our documentation or community forum for support.
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <Button size="sm" variant="outline" onClick={() => window.open('https://docs.vaultcrm.app', '_blank')}>
-                    Documentation
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => window.open('https://community.vaultcrm.app', '_blank')}>
-                    Community
-                  </Button>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -719,31 +703,31 @@ export function Settings() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Info className="h-5 w-5" />
-                About VaultCRM
+                {t('settings.about')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-4">
                 <div className="p-4 rounded-lg bg-muted/50 text-center">
                   <p className="text-2xl font-bold">{appInfo.version || '1.0.0'}</p>
-                  <p className="text-sm text-muted-foreground">Version</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.version')}</p>
                 </div>
                 <div className="p-4 rounded-lg bg-muted/50 text-center">
                   <p className="text-2xl font-bold capitalize">{appInfo.platform || 'Desktop'}</p>
-                  <p className="text-sm text-muted-foreground">Platform</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.platform')}</p>
                 </div>
                 <div className="p-4 rounded-lg bg-muted/50 text-center">
                   <p className="text-2xl font-bold">{contacts.length}</p>
-                  <p className="text-sm text-muted-foreground">Contacts</p>
+                  <p className="text-sm text-muted-foreground">{t('contacts.title')}</p>
                 </div>
               </div>
 
               <Separator className="my-6" />
 
               <div className="text-center text-sm text-muted-foreground">
-                <p className="font-medium">VaultCRM - Local-First Personal CRM</p>
-                <p className="mt-1">Privacy-first relationship management for professionals</p>
-                <p className="mt-4">© 2026 VaultCRM. All rights reserved.</p>
+                <p className="font-medium">VaultCRM - {t('settings.aboutTagline')}</p>
+                <p className="mt-1">{t('settings.aboutDesc')}</p>
+                <p className="mt-4">{t('settings.copyright', { year: new Date().getFullYear() })}</p>
               </div>
             </CardContent>
           </Card>

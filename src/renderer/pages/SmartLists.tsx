@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   CalendarClock,
   AlertTriangle,
@@ -31,6 +32,7 @@ interface FollowUp {
 }
 
 export function SmartLists() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('overdue')
   const [overdue, setOverdue] = useState<FollowUp[]>([])
   const [dueToday, setDueToday] = useState<FollowUp[]>([])
@@ -81,25 +83,25 @@ export function SmartLists() {
   }
 
   const formatRelativeDate = (date: string | null): string => {
-    if (!date) return 'Never'
+    if (!date) return t('common.never')
     const d = new Date(date)
     const now = new Date()
     const diffMs = now.getTime() - d.getTime()
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-    if (diffDays === 0) return 'Today'
-    if (diffDays === 1) return 'Yesterday'
-    if (diffDays < 7) return `${diffDays} days ago`
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
-    return `${Math.floor(diffDays / 365)} years ago`
+    if (diffDays === 0) return t('common.today')
+    if (diffDays === 1) return t('common.yesterday')
+    if (diffDays < 7) return t('common.daysAgo', { count: diffDays })
+    if (diffDays < 30) return t('common.weeksAgo', { count: Math.floor(diffDays / 7) })
+    if (diffDays < 365) return t('common.monthsAgo', { count: Math.floor(diffDays / 30) })
+    return t('common.monthsAgo', { count: Math.floor(diffDays / 365) })
   }
 
   const smartLists = [
     {
       id: 'overdue',
-      title: 'Overdue',
-      description: 'Follow-ups past their due date',
+      title: t('smartLists.overdue'),
+      description: t('smartLists.overdueDesc'),
       icon: AlertTriangle,
       color: 'text-red-500',
       bg: 'bg-red-500/10',
@@ -109,8 +111,8 @@ export function SmartLists() {
     },
     {
       id: 'today',
-      title: 'Due Today',
-      description: 'Follow-ups due today',
+      title: t('smartLists.dueToday'),
+      description: t('smartLists.dueTodayDesc'),
       icon: CalendarClock,
       color: 'text-amber-500',
       bg: 'bg-amber-500/10',
@@ -120,8 +122,8 @@ export function SmartLists() {
     },
     {
       id: 'upcoming',
-      title: 'Upcoming (7 days)',
-      description: 'Follow-ups due this week',
+      title: t('smartLists.upcoming7'),
+      description: t('smartLists.upcoming7Desc'),
       icon: Clock,
       color: 'text-blue-500',
       bg: 'bg-blue-500/10',
@@ -131,8 +133,8 @@ export function SmartLists() {
     },
     {
       id: 'stale30',
-      title: 'Stale (30 days)',
-      description: 'No contact in 30 days',
+      title: t('smartLists.stale30'),
+      description: t('smartLists.stale30Desc'),
       icon: Users,
       color: 'text-orange-500',
       bg: 'bg-orange-500/10',
@@ -142,8 +144,8 @@ export function SmartLists() {
     },
     {
       id: 'stale60',
-      title: 'Stale (60 days)',
-      description: 'No contact in 30-60 days',
+      title: t('smartLists.stale60'),
+      description: t('smartLists.stale60Desc'),
       icon: Users,
       color: 'text-orange-600',
       bg: 'bg-orange-600/10',
@@ -153,8 +155,8 @@ export function SmartLists() {
     },
     {
       id: 'stale90',
-      title: 'Stale (90+ days)',
-      description: 'No contact in 60-90+ days',
+      title: t('smartLists.stale90'),
+      description: t('smartLists.stale90Desc'),
       icon: Users,
       color: 'text-red-600',
       bg: 'bg-red-600/10',
@@ -164,8 +166,8 @@ export function SmartLists() {
     },
     {
       id: 'hot',
-      title: 'Hot List',
-      description: 'Investors & Hot Leads',
+      title: t('smartLists.hotList'),
+      description: t('smartLists.hotListDesc'),
       icon: Flame,
       color: 'text-rose-500',
       bg: 'bg-rose-500/10',
@@ -178,9 +180,9 @@ export function SmartLists() {
   if (isLoading) {
     return (
       <div className="flex flex-col h-screen">
-        <Header title="Smart Lists" description="Intelligent contact segmentation" />
+        <Header title={t('smartLists.title')} description={t('smartLists.description')} />
         <div className="flex-1 flex items-center justify-center">
-          <div className="animate-pulse text-muted-foreground">Loading...</div>
+          <div className="animate-pulse text-muted-foreground">{t('common.loading')}</div>
         </div>
       </div>
     )
@@ -188,7 +190,7 @@ export function SmartLists() {
 
   return (
     <div className="flex flex-col h-screen">
-      <Header title="Smart Lists" description="Intelligent contact segmentation" />
+      <Header title={t('smartLists.title')} description={t('smartLists.description')} />
 
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-6">
@@ -249,11 +251,11 @@ export function SmartLists() {
                           />
                         )}
                       </div>
-                      <p className="text-muted-foreground">No items in this list</p>
+                      <p className="text-muted-foreground">{t('smartLists.noItems')}</p>
                       <p className="text-sm text-muted-foreground/70">
                         {activeList?.type === 'followup'
-                          ? 'All follow-ups are on track!'
-                          : 'Great job staying in touch!'}
+                          ? t('smartLists.allOnTrack')
+                          : t('smartLists.stayingInTouch')}
                       </p>
                     </div>
                   )

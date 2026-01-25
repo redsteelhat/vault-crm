@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Upload, FileSpreadsheet, ArrowRight, Check, AlertCircle, X } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -16,17 +17,6 @@ import { useToast } from '@/hooks/useToast'
 import { useContactStore } from '@/stores/contactStore'
 import { cn } from '@/lib/utils'
 
-const CONTACT_FIELDS = [
-  { key: 'name', label: 'Name', required: true },
-  { key: 'email', label: 'Email', required: false },
-  { key: 'company', label: 'Company', required: false },
-  { key: 'title', label: 'Title', required: false },
-  { key: 'phone', label: 'Phone', required: false },
-  { key: 'location', label: 'Location', required: false },
-  { key: 'source', label: 'Source', required: false },
-  { key: 'notes', label: 'Notes', required: false }
-]
-
 type Step = 'select' | 'map' | 'preview' | 'result'
 
 interface CsvPreview {
@@ -41,8 +31,20 @@ interface ImportResult {
 }
 
 export function Import() {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const { fetchContacts } = useContactStore()
+
+  const CONTACT_FIELDS = [
+    { key: 'name', label: t('contacts.fields.name'), required: true },
+    { key: 'email', label: t('contacts.fields.email'), required: false },
+    { key: 'company', label: t('contacts.fields.company'), required: false },
+    { key: 'title', label: t('contacts.fields.title'), required: false },
+    { key: 'phone', label: t('contacts.fields.phone'), required: false },
+    { key: 'location', label: t('contacts.fields.location'), required: false },
+    { key: 'source', label: t('contacts.fields.source'), required: false },
+    { key: 'notes', label: t('contacts.fields.notes'), required: false }
+  ]
 
   const [step, setStep] = useState<Step>('select')
   const [filePath, setFilePath] = useState<string | null>(null)
@@ -77,14 +79,14 @@ export function Import() {
         setIsLoading(false)
       }
     } catch (error) {
-      toast({ title: 'Failed to load file', variant: 'destructive' })
+      toast({ title: t('errors.loadFailed'), variant: 'destructive' })
       setIsLoading(false)
     }
   }
 
   const handleImport = async () => {
     if (!filePath || !mapping.name) {
-      toast({ title: 'Name mapping is required', variant: 'destructive' })
+      toast({ title: t('import.csvRequired'), variant: 'destructive' })
       return
     }
 
@@ -95,7 +97,7 @@ export function Import() {
       setStep('result')
       fetchContacts()
     } catch (error) {
-      toast({ title: 'Import failed', variant: 'destructive' })
+      toast({ title: t('errors.importFailed'), variant: 'destructive' })
     }
     setIsLoading(false)
   }
@@ -120,7 +122,7 @@ export function Import() {
 
   return (
     <div className="flex flex-col h-screen">
-      <Header title="Import Contacts" description="Import contacts from CSV files" />
+      <Header title={t('import.title')} description={t('import.description')} />
 
       <ScrollArea className="flex-1">
         <div className="p-6 max-w-4xl mx-auto">
@@ -156,9 +158,9 @@ export function Import() {
           {step === 'select' && (
             <Card className="border-none shadow-sm">
               <CardHeader className="text-center">
-                <CardTitle>Select CSV File</CardTitle>
+                <CardTitle>{t('import.selectFile')}</CardTitle>
                 <CardDescription>
-                  Choose a CSV file containing your contacts to import
+                  {t('import.description')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col items-center py-12">
@@ -167,17 +169,14 @@ export function Import() {
                   onClick={handleSelectFile}
                 >
                   <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-lg font-medium mb-2">Click to select CSV file</p>
+                  <p className="text-lg font-medium mb-2">{t('import.dropFile')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Supports standard CSV format with headers
+                    {t('import.orBrowse')}
                   </p>
                 </div>
                 <div className="mt-6 text-sm text-muted-foreground text-center">
-                  <p className="font-medium mb-2">Required columns:</p>
-                  <p>At minimum, your CSV should have a &quot;Name&quot; column</p>
-                  <p className="mt-2">
-                    Optional: Email, Company, Title, Phone, Location, Source, Notes
-                  </p>
+                  <p className="font-medium mb-2">{t('contacts.fields.name')} *</p>
+                  <p>{t('import.mapColumns')}</p>
                 </div>
               </CardContent>
             </Card>
@@ -189,10 +188,10 @@ export function Import() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileSpreadsheet className="h-5 w-5" />
-                  Map Columns
+                  {t('import.mapping')}
                 </CardTitle>
                 <CardDescription>
-                  Match your CSV columns to contact fields. Found {preview.rows.length}+ rows.
+                  {t('import.mapColumns')} - {preview.rows.length}+ rows.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -232,7 +231,7 @@ export function Import() {
 
                 {/* Preview Table */}
                 <div className="mt-6">
-                  <h4 className="text-sm font-medium mb-3">Data Preview (first 5 rows)</h4>
+                  <h4 className="text-sm font-medium mb-3">{t('import.preview')}</h4>
                   <div className="border rounded-lg overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
@@ -269,10 +268,10 @@ export function Import() {
 
                 <div className="flex justify-between pt-4">
                   <Button variant="outline" onClick={handleReset}>
-                    Cancel
+                    {t('common.cancel')}
                   </Button>
                   <Button onClick={() => setStep('preview')} disabled={!mapping.name}>
-                    Continue <ArrowRight className="ml-2 h-4 w-4" />
+                    {t('common.next')} <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </div>
               </CardContent>
@@ -283,8 +282,8 @@ export function Import() {
           {step === 'preview' && preview && (
             <Card className="border-none shadow-sm">
               <CardHeader>
-                <CardTitle>Confirm Import</CardTitle>
-                <CardDescription>Review your mapping before importing</CardDescription>
+                <CardTitle>{t('common.confirm')}</CardTitle>
+                <CardDescription>{t('import.preview')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
@@ -299,18 +298,16 @@ export function Import() {
 
                 <div className="p-4 rounded-lg bg-amber-500/10 text-amber-500">
                   <p className="text-sm">
-                    <strong>Ready to import {preview.rows.length}+ contacts.</strong>
-                    <br />
-                    Duplicate emails will be skipped automatically.
+                    <strong>{t('import.imported', { count: preview.rows.length })}+</strong>
                   </p>
                 </div>
 
                 <div className="flex justify-between pt-4">
                   <Button variant="outline" onClick={() => setStep('map')}>
-                    Back
+                    {t('common.back')}
                   </Button>
                   <Button onClick={handleImport} disabled={isLoading}>
-                    {isLoading ? 'Importing...' : 'Start Import'}
+                    {isLoading ? t('import.importing') : t('import.startImport')}
                   </Button>
                 </div>
               </CardContent>
@@ -324,29 +321,29 @@ export function Import() {
                 <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
                   <Check className="h-8 w-8 text-green-500" />
                 </div>
-                <CardTitle>Import Complete</CardTitle>
+                <CardTitle>{t('import.importComplete')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div className="p-4 rounded-lg bg-green-500/10">
                     <p className="text-3xl font-bold text-green-500">{result.imported}</p>
-                    <p className="text-sm text-muted-foreground">Imported</p>
+                    <p className="text-sm text-muted-foreground">{t('import.imported', { count: result.imported })}</p>
                   </div>
                   <div className="p-4 rounded-lg bg-amber-500/10">
                     <p className="text-3xl font-bold text-amber-500">{result.skipped}</p>
-                    <p className="text-sm text-muted-foreground">Skipped</p>
+                    <p className="text-sm text-muted-foreground">{t('import.skipped', { count: result.skipped })}</p>
                   </div>
                   <div className="p-4 rounded-lg bg-red-500/10">
                     <p className="text-3xl font-bold text-red-500">
                       {result.errors.filter((e) => !e.includes('Duplicate')).length}
                     </p>
-                    <p className="text-sm text-muted-foreground">Errors</p>
+                    <p className="text-sm text-muted-foreground">{t('import.errors', { count: result.errors.length })}</p>
                   </div>
                 </div>
 
                 {result.errors.length > 0 && (
                   <div className="max-h-48 overflow-y-auto">
-                    <h4 className="text-sm font-medium mb-2">Details:</h4>
+                    <h4 className="text-sm font-medium mb-2">{t('common.info')}:</h4>
                     <div className="space-y-1">
                       {result.errors.slice(0, 20).map((error, i) => (
                         <p key={i} className="text-sm text-muted-foreground">
@@ -363,7 +360,7 @@ export function Import() {
                       ))}
                       {result.errors.length > 20 && (
                         <p className="text-sm text-muted-foreground">
-                          ...and {result.errors.length - 20} more
+                          ...+{result.errors.length - 20}
                         </p>
                       )}
                     </div>
@@ -371,7 +368,7 @@ export function Import() {
                 )}
 
                 <div className="flex justify-center pt-4">
-                  <Button onClick={handleReset}>Import Another File</Button>
+                  <Button onClick={handleReset}>{t('import.importAnother')}</Button>
                 </div>
               </CardContent>
             </Card>

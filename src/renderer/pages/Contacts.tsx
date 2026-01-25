@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Plus, Search, Filter, MoreVertical, Mail, Phone, Building2, Users } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
@@ -25,10 +26,10 @@ import {
 import { useContactStore } from '@/stores/contactStore'
 import { formatRelativeDate, parseEmails, parsePhones, getInitials, debounce } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
-import { useCallback } from 'react'
 import { DuplicateMergeDialog } from '@/components/DuplicateMergeDialog'
 
 export function Contacts() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { toast } = useToast()
   const {
@@ -79,7 +80,7 @@ export function Contacts() {
 
   const handleCreateContact = async () => {
     if (!newContact.name.trim()) {
-      toast({ title: 'Name is required', variant: 'destructive' })
+      toast({ title: t('contacts.fields.name') + ' ' + t('common.error'), variant: 'destructive' })
       return
     }
 
@@ -96,7 +97,7 @@ export function Contacts() {
         last_contact_at: null
       })
 
-      toast({ title: 'Contact created', variant: 'success' })
+      toast({ title: t('contacts.contactCreated'), variant: 'success' })
       setIsCreateOpen(false)
       setNewContact({
         name: '',
@@ -110,24 +111,24 @@ export function Contacts() {
       })
       navigate(`/contacts/${contact.id}`)
     } catch {
-      toast({ title: 'Failed to create contact', variant: 'destructive' })
+      toast({ title: t('errors.saveFailed'), variant: 'destructive' })
     }
   }
 
   const handleDeleteContact = async (id: string, name: string) => {
-    if (confirm(`Are you sure you want to delete ${name}?`)) {
+    if (confirm(t('contacts.deleteConfirm'))) {
       try {
         await deleteContact(id)
-        toast({ title: 'Contact deleted' })
+        toast({ title: t('contacts.contactDeleted') })
       } catch {
-        toast({ title: 'Failed to delete contact', variant: 'destructive' })
+        toast({ title: t('errors.deleteFailed'), variant: 'destructive' })
       }
     }
   }
 
   return (
     <div className="flex flex-col h-screen">
-      <Header title="Contacts" description={`${contacts.length} contacts in your network`} />
+      <Header title={t('contacts.title')} description={`${contacts.length} ${t('contacts.title').toLowerCase()}`} />
 
       <div className="flex-1 flex flex-col">
         {/* Toolbar */}
@@ -137,7 +138,7 @@ export function Contacts() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search by name, company, or notes..."
+                placeholder={t('contacts.searchPlaceholder')}
                 className="pl-9"
                 value={localSearch}
                 onChange={handleSearchChange}
@@ -149,10 +150,10 @@ export function Contacts() {
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setIsDuplicateOpen(true)}>
-              <Users className="h-4 w-4 mr-2" /> Find Duplicates
+              <Users className="h-4 w-4 mr-2" /> {t('contacts.findDuplicates')}
             </Button>
             <Button onClick={() => setIsCreateOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" /> Add Contact
+              <Plus className="h-4 w-4 mr-2" /> {t('contacts.addContact')}
             </Button>
           </div>
         </div>
@@ -169,15 +170,15 @@ export function Contacts() {
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
                   <Building2 className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <h3 className="text-lg font-medium mb-1">No contacts found</h3>
+                <h3 className="text-lg font-medium mb-1">{t('contacts.noContacts')}</h3>
                 <p className="text-muted-foreground mb-4">
                   {searchQuery
-                    ? 'Try a different search term'
-                    : 'Add your first contact to get started'}
+                    ? t('common.noResults')
+                    : t('contacts.noContactsDesc')}
                 </p>
                 {!searchQuery && (
                   <Button onClick={() => setIsCreateOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" /> Add Contact
+                    <Plus className="h-4 w-4 mr-2" /> {t('contacts.addContact')}
                   </Button>
                 )}
               </div>
@@ -231,13 +232,13 @@ export function Contacts() {
                               <DropdownMenuItem
                                 onClick={() => navigate(`/contacts/${contact.id}`)}
                               >
-                                View details
+                                {t('common.edit')}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive"
                                 onClick={() => handleDeleteContact(contact.id, contact.name)}
                               >
-                                Delete
+                                {t('common.delete')}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -275,11 +276,11 @@ export function Contacts() {
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add New Contact</DialogTitle>
+            <DialogTitle>{t('contacts.addContact')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
+              <Label htmlFor="name">{t('contacts.fields.name')} *</Label>
               <Input
                 id="name"
                 placeholder="John Doe"
@@ -289,7 +290,7 @@ export function Contacts() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('contacts.fields.email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -299,7 +300,7 @@ export function Contacts() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone">{t('contacts.fields.phone')}</Label>
                 <Input
                   id="phone"
                   placeholder="+1 555 123 4567"
@@ -310,7 +311,7 @@ export function Contacts() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="company">Company</Label>
+                <Label htmlFor="company">{t('contacts.fields.company')}</Label>
                 <Input
                   id="company"
                   placeholder="Acme Inc"
@@ -319,7 +320,7 @@ export function Contacts() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
+                <Label htmlFor="title">{t('contacts.fields.title')}</Label>
                 <Input
                   id="title"
                   placeholder="CEO"
@@ -330,7 +331,7 @@ export function Contacts() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
+                <Label htmlFor="location">{t('contacts.fields.location')}</Label>
                 <Input
                   id="location"
                   placeholder="New York, NY"
@@ -339,7 +340,7 @@ export function Contacts() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="source">Source</Label>
+                <Label htmlFor="source">{t('contacts.fields.source')}</Label>
                 <Input
                   id="source"
                   placeholder="LinkedIn, Conference..."
@@ -349,10 +350,10 @@ export function Contacts() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
+              <Label htmlFor="notes">{t('contacts.fields.notes')}</Label>
               <Textarea
                 id="notes"
-                placeholder="Add any notes about this contact..."
+                placeholder={t('contacts.fields.notes') + '...'}
                 value={newContact.notes}
                 onChange={(e) => setNewContact({ ...newContact, notes: e.target.value })}
               />
@@ -360,9 +361,9 @@ export function Contacts() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
-            <Button onClick={handleCreateContact}>Create Contact</Button>
+            <Button onClick={handleCreateContact}>{t('common.create')} {t('contacts.title').slice(0,-1)}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

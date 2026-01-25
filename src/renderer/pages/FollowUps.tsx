@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   CalendarClock,
   AlertTriangle,
@@ -35,6 +36,7 @@ import { formatDate, getDueDateLabel, cn } from '@/lib/utils'
 import { format } from 'date-fns'
 
 export function FollowUps() {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const {
     dueToday,
@@ -61,9 +63,9 @@ export function FollowUps() {
   const handleMarkDone = async (id: string) => {
     try {
       await markDone(id)
-      toast({ title: 'Follow-up completed', variant: 'success' })
+      toast({ title: t('followups.followupCompleted'), variant: 'success' })
     } catch {
-      toast({ title: 'Failed to update', variant: 'destructive' })
+      toast({ title: t('errors.saveFailed'), variant: 'destructive' })
     }
   }
 
@@ -71,21 +73,21 @@ export function FollowUps() {
     if (!selectedFollowUp) return
     try {
       await snooze(selectedFollowUp, snoozeDate.toISOString())
-      toast({ title: 'Follow-up snoozed', variant: 'success' })
+      toast({ title: t('followups.followupSnoozed'), variant: 'success' })
       setSnoozeDialogOpen(false)
       setSelectedFollowUp(null)
     } catch {
-      toast({ title: 'Failed to snooze', variant: 'destructive' })
+      toast({ title: t('errors.saveFailed'), variant: 'destructive' })
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm('Delete this follow-up?')) {
+    if (confirm(t('common.confirm') + '?')) {
       try {
         await deleteFollowUp(id)
-        toast({ title: 'Follow-up deleted' })
+        toast({ title: t('common.delete') })
       } catch {
-        toast({ title: 'Failed to delete', variant: 'destructive' })
+        toast({ title: t('errors.deleteFailed'), variant: 'destructive' })
       }
     }
   }
@@ -141,7 +143,7 @@ export function FollowUps() {
             className="shrink-0"
             onClick={() => handleMarkDone(followup.id)}
           >
-            <CheckCircle2 className="h-4 w-4 mr-1" /> Done
+            <CheckCircle2 className="h-4 w-4 mr-1" /> {t('followups.markDone')}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -151,13 +153,13 @@ export function FollowUps() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => openSnoozeDialog(followup.id)}>
-                Snooze
+                {t('followups.snooze')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={() => handleDelete(followup.id)}
               >
-                Delete
+                {t('common.delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -175,7 +177,7 @@ export function FollowUps() {
 
   return (
     <div className="flex flex-col h-screen">
-      <Header title="Follow-ups" description="Stay on top of your relationships" />
+      <Header title={t('followups.title')} description={t('followups.description')} />
 
       <ScrollArea className="flex-1">
         <div className="p-6">
@@ -188,7 +190,7 @@ export function FollowUps() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{overdue.length}</p>
-                  <p className="text-sm text-muted-foreground">Overdue</p>
+                  <p className="text-sm text-muted-foreground">{t('followups.overdue')}</p>
                 </div>
               </CardContent>
             </Card>
@@ -199,7 +201,7 @@ export function FollowUps() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{dueToday.length}</p>
-                  <p className="text-sm text-muted-foreground">Due Today</p>
+                  <p className="text-sm text-muted-foreground">{t('followups.dueToday')}</p>
                 </div>
               </CardContent>
             </Card>
@@ -210,7 +212,7 @@ export function FollowUps() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{upcoming.length}</p>
-                  <p className="text-sm text-muted-foreground">Upcoming (30 days)</p>
+                  <p className="text-sm text-muted-foreground">{t('followups.upcoming')} (30 {t('settings.minutes').replace('dakika', 'gün').replace('minutes', 'days')})</p>
                 </div>
               </CardContent>
             </Card>
@@ -220,27 +222,27 @@ export function FollowUps() {
           <Tabs defaultValue="all" className="space-y-4">
             <TabsList>
               <TabsTrigger value="all">
-                All ({overdue.length + dueToday.length + upcoming.length})
+                {t('common.all')} ({overdue.length + dueToday.length + upcoming.length})
               </TabsTrigger>
               <TabsTrigger value="overdue" className="text-red-500">
-                Overdue ({overdue.length})
+                {t('followups.overdue')} ({overdue.length})
               </TabsTrigger>
               <TabsTrigger value="today" className="text-amber-500">
-                Today ({dueToday.length})
+                {t('common.today')} ({dueToday.length})
               </TabsTrigger>
-              <TabsTrigger value="upcoming">Upcoming ({upcoming.length})</TabsTrigger>
+              <TabsTrigger value="upcoming">{t('followups.upcoming')} ({upcoming.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="all">
               <div className="space-y-3">
                 {overdue.length === 0 && dueToday.length === 0 && upcoming.length === 0 ? (
-                  <EmptyState message="No pending follow-ups" />
+                  <EmptyState message={t('followups.noFollowups')} />
                 ) : (
                   <>
                     {overdue.length > 0 && (
                       <div className="mb-6">
                         <h3 className="text-sm font-medium text-red-500 mb-3 flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4" /> Overdue
+                          <AlertTriangle className="h-4 w-4" /> {t('followups.overdue')}
                         </h3>
                         <div className="space-y-2">
                           {overdue.map((f) => (
@@ -252,7 +254,7 @@ export function FollowUps() {
                     {dueToday.length > 0 && (
                       <div className="mb-6">
                         <h3 className="text-sm font-medium text-amber-500 mb-3 flex items-center gap-2">
-                          <CalendarClock className="h-4 w-4" /> Due Today
+                          <CalendarClock className="h-4 w-4" /> {t('followups.dueToday')}
                         </h3>
                         <div className="space-y-2">
                           {dueToday.map((f) => (
@@ -264,7 +266,7 @@ export function FollowUps() {
                     {upcoming.length > 0 && (
                       <div>
                         <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                          <Clock className="h-4 w-4" /> Upcoming
+                          <Clock className="h-4 w-4" /> {t('followups.upcoming')}
                         </h3>
                         <div className="space-y-2">
                           {upcoming.map((f) => (
@@ -280,7 +282,7 @@ export function FollowUps() {
 
             <TabsContent value="overdue">
               {overdue.length === 0 ? (
-                <EmptyState message="No overdue follow-ups" />
+                <EmptyState message={t('followups.noFollowupsDesc')} />
               ) : (
                 <div className="space-y-2">
                   {overdue.map((f) => (
@@ -292,7 +294,7 @@ export function FollowUps() {
 
             <TabsContent value="today">
               {dueToday.length === 0 ? (
-                <EmptyState message="No follow-ups due today" />
+                <EmptyState message={t('followups.noFollowupsDesc')} />
               ) : (
                 <div className="space-y-2">
                   {dueToday.map((f) => (
@@ -304,7 +306,7 @@ export function FollowUps() {
 
             <TabsContent value="upcoming">
               {upcoming.length === 0 ? (
-                <EmptyState message="No upcoming follow-ups" />
+                <EmptyState message={t('followups.noFollowupsDesc')} />
               ) : (
                 <div className="space-y-2">
                   {upcoming.map((f) => (
@@ -321,11 +323,11 @@ export function FollowUps() {
       <Dialog open={snoozeDialogOpen} onOpenChange={setSnoozeDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Snooze Follow-up</DialogTitle>
+            <DialogTitle>{t('followups.snooze')}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <p className="text-sm text-muted-foreground mb-4">
-              Select a new date for this follow-up
+              {t('followups.snoozeTo')}
             </p>
             <Popover>
               <PopoverTrigger asChild>
@@ -346,9 +348,9 @@ export function FollowUps() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSnoozeDialogOpen(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
-            <Button onClick={handleSnooze}>Snooze</Button>
+            <Button onClick={handleSnooze}>{t('followups.snooze')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
