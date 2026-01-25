@@ -1,0 +1,296 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Release channel'
+        required: true
+        default: 'beta'
+        type: choice
+        options:
+          - beta
+          - stable
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '8'
+
+jobs:
+  # Build job - runs on all platforms
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact_ext: '.exe'
+          - os: macos-latest
+            platform: mac
+            artifact_ext: '.dmg'
+          - os: ubuntu-latest
+            platform: linux
+            artifact_ext: '.AppImage'
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+
+      # Windows build
+      - name: Build Windows
+        if: matrix.platform == 'win'
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: pnpm build:win
+
+      # macOS build
+      - name: Build macOS
+        if: matrix.platform == 'mac'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        run: pnpm build:mac
+
+      # Linux build
+      - name: Build Linux
+        if: matrix.platform == 'linux'
+        run: pnpm build:linux
+
+      # Upload artifacts
+      - name: Upload Windows artifacts
+        if: matrix.platform == 'win'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vaultcrm-windows
+          path: |
+            release/*.exe
+            release/*.blockmap
+          retention-days: 14
+
+      - name: Upload macOS artifacts
+        if: matrix.platform == 'mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vaultcrm-macos
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+          retention-days: 14
+
+      - name: Upload Linux artifacts
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vaultcrm-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+          retention-days: 14
+
+  # Release job - only runs on tags or manual dispatch
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - name: Determine release channel
+        id: channel
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "channel=${{ github.event.inputs.channel }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == *"-beta"* ]] || [[ "${{ github.ref }}" == *"-rc"* ]]; then
+            echo "channel=beta" >> $GITHUB_OUTPUT
+          else
+            echo "channel=stable" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+          else
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release (Beta)
+        if: steps.channel.outputs.channel == 'beta'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: VaultCRM v${{ steps.version.outputs.version }} (Beta)
+          draft: true
+          prerelease: true
+          files: |
+            artifacts/vaultcrm-windows/*
+            artifacts/vaultcrm-macos/*
+            artifacts/vaultcrm-linux/*
+          body: |
+            ## VaultCRM v${{ steps.version.outputs.version }} (Beta)
+            
+            This is a **beta release** for testing. Not recommended for production use.
+            
+            ### Downloads
+            - **Windows**: `VaultCRM-${{ steps.version.outputs.version }}-setup.exe`
+            - **macOS**: `VaultCRM-${{ steps.version.outputs.version }}.dmg` (Intel & Apple Silicon)
+            - **Linux**: `VaultCRM-${{ steps.version.outputs.version }}.AppImage`
+            
+            ### What's New
+            - See [CHANGELOG.md](CHANGELOG.md) for details
+            
+            ### Feedback
+            Please report issues at: https://github.com/${{ github.repository }}/issues
+
+      - name: Create Release (Stable)
+        if: steps.channel.outputs.channel == 'stable'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: VaultCRM v${{ steps.version.outputs.version }}
+          draft: true
+          prerelease: false
+          files: |
+            artifacts/vaultcrm-windows/*
+            artifacts/vaultcrm-macos/*
+            artifacts/vaultcrm-linux/*
+          body: |
+            ## VaultCRM v${{ steps.version.outputs.version }}
+            
+            ### Downloads
+            - **Windows**: `VaultCRM-${{ steps.version.outputs.version }}-setup.exe`
+            - **macOS**: `VaultCRM-${{ steps.version.outputs.version }}.dmg` (Intel & Apple Silicon)
+            - **Linux**: `VaultCRM-${{ steps.version.outputs.version }}.AppImage`
+            
+            ### What's New
+            - See [CHANGELOG.md](CHANGELOG.md) for details
+            
+            ### Installation
+            1. Download the appropriate file for your operating system
+            2. Run the installer
+            3. Create your master password to encrypt your data
+            
+            ### Privacy
+            VaultCRM is a local-first application. All data stays on your device.
+
+  # Update check job - updates the update manifest for auto-updater
+  update-manifest:
+    needs: release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Determine channel
+        id: channel
+        run: |
+          if [[ "${{ github.ref }}" == *"-beta"* ]] || [[ "${{ github.ref }}" == *"-rc"* ]]; then
+            echo "channel=beta" >> $GITHUB_OUTPUT
+            echo "url=https://beta.releases.vaultcrm.app" >> $GITHUB_OUTPUT
+          else
+            echo "channel=stable" >> $GITHUB_OUTPUT
+            echo "url=https://releases.vaultcrm.app" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create update manifest
+        run: |
+          mkdir -p update-manifest
+          
+          cat > update-manifest/latest.yml << EOF
+          version: ${{ steps.version.outputs.version }}
+          files:
+            - url: VaultCRM-${{ steps.version.outputs.version }}-setup.exe
+              sha512: TBD
+              size: TBD
+          path: VaultCRM-${{ steps.version.outputs.version }}-setup.exe
+          sha512: TBD
+          releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          EOF
+          
+          cat > update-manifest/latest-mac.yml << EOF
+          version: ${{ steps.version.outputs.version }}
+          files:
+            - url: VaultCRM-${{ steps.version.outputs.version }}-arm64.dmg
+              sha512: TBD
+              size: TBD
+            - url: VaultCRM-${{ steps.version.outputs.version }}-x64.dmg
+              sha512: TBD
+              size: TBD
+          path: VaultCRM-${{ steps.version.outputs.version }}.dmg
+          sha512: TBD
+          releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          EOF
+          
+          cat > update-manifest/latest-linux.yml << EOF
+          version: ${{ steps.version.outputs.version }}
+          files:
+            - url: VaultCRM-${{ steps.version.outputs.version }}.AppImage
+              sha512: TBD
+              size: TBD
+          path: VaultCRM-${{ steps.version.outputs.version }}.AppImage
+          sha512: TBD
+          releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          EOF
+          
+          echo "Update manifests created for channel: ${{ steps.channel.outputs.channel }}"
+
+      - name: Upload update manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-manifests
+          path: update-manifest/
+          retention-days: 30

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Download, Database, Moon, Sun, Shield, HardDrive, Info, Lock, Clock, Eye, EyeOff, Key } from 'lucide-react'
+import { Download, Database, Moon, Sun, Shield, HardDrive, Info, Lock, Clock, Eye, EyeOff, Key, RefreshCw, MessageCircle, Bug, FileText, Radio } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -36,9 +36,24 @@ export function Settings() {
   const [showPasswords, setShowPasswords] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
 
+  // Update settings
+  const [updateChannel, setUpdateChannel] = useState<'stable' | 'beta'>('stable')
+  const [autoCheck, setAutoCheck] = useState(true)
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
+
+  // Diagnostics
+  const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false)
+
+  // Feedback dialog
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false)
+  const [feedbackType, setFeedbackType] = useState<'bug' | 'feature' | 'general'>('general')
+  const [feedbackText, setFeedbackText] = useState('')
+  const [includeDiagnostics, setIncludeDiagnostics] = useState(false)
+
   useEffect(() => {
     loadAppInfo()
     loadVaultSettings()
+    loadUpdateSettings()
   }, [])
 
   const loadAppInfo = async () => {
@@ -65,6 +80,70 @@ export function Settings() {
     } catch (error) {
       console.error('Failed to load vault settings:', error)
     }
+  }
+
+  const loadUpdateSettings = async () => {
+    try {
+      const status = await window.api.updater.getStatus()
+      setUpdateChannel(status.channel)
+      setAutoCheck(status.autoCheck)
+    } catch (error) {
+      console.error('Failed to load update settings:', error)
+    }
+  }
+
+  const handleCheckForUpdates = async () => {
+    setIsCheckingUpdate(true)
+    try {
+      const result = await window.api.updater.checkForUpdates()
+      if (!result.available) {
+        toast({ title: 'You are running the latest version' })
+      }
+    } catch {
+      toast({ title: 'Failed to check for updates', variant: 'destructive' })
+    } finally {
+      setIsCheckingUpdate(false)
+    }
+  }
+
+  const handleUpdateChannelChange = async (channel: 'stable' | 'beta') => {
+    setUpdateChannel(channel)
+    await window.api.updater.setChannel(channel)
+    toast({ title: `Update channel changed to ${channel}` })
+  }
+
+  const handleAutoCheckChange = async () => {
+    const newValue = !autoCheck
+    setAutoCheck(newValue)
+    await window.api.updater.setAutoCheck(newValue)
+    toast({ title: newValue ? 'Auto-update check enabled' : 'Auto-update check disabled' })
+  }
+
+  const handleExportDiagnostics = async () => {
+    setIsExportingDiagnostics(true)
+    try {
+      const result = await window.api.diagnostics.export()
+      if (result.success) {
+        toast({ title: 'Diagnostics exported successfully', variant: 'success' })
+      } else if (!result.cancelled) {
+        toast({ title: result.error || 'Failed to export diagnostics', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Failed to export diagnostics', variant: 'destructive' })
+    } finally {
+      setIsExportingDiagnostics(false)
+    }
+  }
+
+  const handleSendFeedback = () => {
+    // Create mailto link with feedback
+    const subject = encodeURIComponent(`[VaultCRM ${feedbackType}] Feedback`)
+    const body = encodeURIComponent(`Type: ${feedbackType}\n\n${feedbackText}\n\n---\nVersion: ${appInfo.version}\nPlatform: ${appInfo.platform}`)
+    window.open(`mailto:feedback@vaultcrm.app?subject=${subject}&body=${body}`)
+    
+    toast({ title: 'Opening email client...' })
+    setShowFeedbackDialog(false)
+    setFeedbackText('')
   }
 
   const handleIdleTimeoutChange = async (value: string) => {
@@ -396,6 +475,195 @@ export function Settings() {
                       AES-256-GCM + PBKDF2
                     </Badge>
                   </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Updates */}
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RefreshCw className="h-5 w-5" />
+                Updates
+              </CardTitle>
+              <CardDescription>Keep VaultCRM up to date</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium">Check for Updates</p>
+                  <p className="text-sm text-muted-foreground">
+                    Current version: {appInfo.version || '1.0.0'}
+                  </p>
+                </div>
+                <Button variant="outline" onClick={handleCheckForUpdates} disabled={isCheckingUpdate}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                  {isCheckingUpdate ? 'Checking...' : 'Check Now'}
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium">Update Channel</p>
+                  <p className="text-sm text-muted-foreground">
+                    Beta channel includes early features
+                  </p>
+                </div>
+                <Select value={updateChannel} onValueChange={(v) => handleUpdateChannelChange(v as 'stable' | 'beta')}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stable">
+                      <div className="flex items-center gap-2">
+                        <Radio className="h-3 w-3 text-emerald-500" /> Stable
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="beta">
+                      <div className="flex items-center gap-2">
+                        <Radio className="h-3 w-3 text-amber-500" /> Beta
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium">Auto-Check Updates</p>
+                  <p className="text-sm text-muted-foreground">
+                    Check for updates on startup
+                  </p>
+                </div>
+                <Button
+                  variant={autoCheck ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={handleAutoCheckChange}
+                >
+                  {autoCheck ? 'Enabled' : 'Disabled'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Diagnostics & Support */}
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bug className="h-5 w-5" />
+                Diagnostics & Support
+              </CardTitle>
+              <CardDescription>Troubleshooting and feedback</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium">Export Diagnostics</p>
+                  <p className="text-sm text-muted-foreground">
+                    Export system info for troubleshooting (no personal data)
+                  </p>
+                </div>
+                <Button variant="outline" onClick={handleExportDiagnostics} disabled={isExportingDiagnostics}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  {isExportingDiagnostics ? 'Exporting...' : 'Export'}
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium">Send Feedback</p>
+                  <p className="text-sm text-muted-foreground">
+                    Report bugs, request features, or share your thoughts
+                  </p>
+                </div>
+                <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <MessageCircle className="h-4 w-4 mr-2" /> Feedback
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Send Feedback</DialogTitle>
+                      <DialogDescription>
+                        We appreciate your feedback! Let us know how we can improve.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label>Feedback Type</Label>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant={feedbackType === 'bug' ? 'default' : 'outline'}
+                            onClick={() => setFeedbackType('bug')}
+                          >
+                            <Bug className="h-4 w-4 mr-1" /> Bug Report
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={feedbackType === 'feature' ? 'default' : 'outline'}
+                            onClick={() => setFeedbackType('feature')}
+                          >
+                            Feature Request
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={feedbackType === 'general' ? 'default' : 'outline'}
+                            onClick={() => setFeedbackType('general')}
+                          >
+                            General
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="feedback">Your Feedback</Label>
+                        <textarea
+                          id="feedback"
+                          className="w-full h-32 p-3 rounded-md border bg-background resize-none"
+                          placeholder="Describe your feedback..."
+                          value={feedbackText}
+                          onChange={(e) => setFeedbackText(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="include-diagnostics"
+                          checked={includeDiagnostics}
+                          onChange={(e) => setIncludeDiagnostics(e.target.checked)}
+                          className="rounded"
+                        />
+                        <Label htmlFor="include-diagnostics" className="text-sm">
+                          Include system diagnostics (no personal data)
+                        </Label>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowFeedbackDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleSendFeedback} disabled={!feedbackText.trim()}>
+                        <MessageCircle className="h-4 w-4 mr-2" /> Send Feedback
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <p className="text-sm text-blue-500 font-medium">Need Help?</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Visit our documentation or community forum for support.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <Button size="sm" variant="outline" onClick={() => window.open('https://docs.vaultcrm.app', '_blank')}>
+                    Documentation
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => window.open('https://community.vaultcrm.app', '_blank')}>
+                    Community
+                  </Button>
                 </div>
               </div>
             </CardContent>

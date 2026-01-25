@@ -9,6 +9,8 @@ import * as settingsRepo from '../database/repositories/settings'
 import { importCsv, previewCsv } from '../services/importer'
 import { exportToCsv, backupDatabase } from '../services/exporter'
 import { getDatabasePath } from '../database/sqlite/connection'
+import { exportDiagnostics, getDiagnosticsSummary, logError } from '../services/diagnostics'
+import { getSafeModeStatus, getAvailableBackups, restoreFromBackup, deleteDatabase, exitSafeMode } from '../services/recovery'
 
 export function registerAllHandlers(ipcMain: IpcMain): void {
   // === CONTACTS ===
@@ -224,6 +226,76 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
 
   ipcMain.handle(IPC_CHANNELS.APP_GET_DATA_PATH, () => {
     return getDatabasePath()
+  })
+
+  // === DIAGNOSTICS ===
+  ipcMain.handle('diagnostics:getSummary', () => {
+    return getDiagnosticsSummary()
+  })
+
+  ipcMain.handle('diagnostics:export', async () => {
+    const result = await dialog.showSaveDialog({
+      defaultPath: `vaultcrm-diagnostics-${new Date().toISOString().split('T')[0]}.zip`,
+      filters: [{ name: 'ZIP Files', extensions: ['zip'] }]
+    })
+    
+    if (result.canceled || !result.filePath) {
+      return { success: false, cancelled: true }
+    }
+    
+    try {
+      await exportDiagnostics(result.filePath)
+      return { success: true, path: result.filePath }
+    } catch (error) {
+      logError(error as Error, 'diagnostics:export')
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  ipcMain.handle('diagnostics:logError', (_, error: string, context?: string) => {
+    logError(error, context)
+  })
+
+  // === RECOVERY / SAFE MODE ===
+  ipcMain.handle('recovery:getSafeModeStatus', () => {
+    return getSafeModeStatus()
+  })
+
+  ipcMain.handle('recovery:getBackups', () => {
+    return getAvailableBackups().map(b => ({
+      path: b.path,
+      date: b.date.toISOString(),
+      size: b.size
+    }))
+  })
+
+  ipcMain.handle('recovery:restoreBackup', async (_, backupPath: string) => {
+    try {
+      const success = restoreFromBackup(backupPath)
+      if (success) {
+        exitSafeMode()
+      }
+      return { success }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  ipcMain.handle('recovery:resetDatabase', async () => {
+    try {
+      const success = deleteDatabase()
+      if (success) {
+        exitSafeMode()
+      }
+      return { success }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  ipcMain.handle('recovery:exitSafeMode', () => {
+    exitSafeMode()
+    return { success: true }
   })
 }
 

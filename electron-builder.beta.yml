@@ -1,0 +1,103 @@
+# VaultCRM Beta Channel Build Configuration
+# Used for beta releases with separate update channel
+
+appId: com.vaultcrm.app.beta
+productName: VaultCRM Beta
+directories:
+  buildResources: resources
+  output: release
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.*'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  
+# Windows Configuration
+win:
+  executableName: VaultCRM-Beta
+  target:
+    - target: nsis
+      arch:
+        - x64
+  signAndEditExecutable: false
+  publisherName: VaultCRM
+  
+nsis:
+  artifactName: ${name}-${version}-beta-setup.${ext}
+  shortcutName: VaultCRM Beta
+  uninstallDisplayName: VaultCRM Beta
+  createDesktopShortcut: always
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  license: resources/license.txt
+  
+# macOS Configuration  
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  
+dmg:
+  artifactName: ${name}-${version}-beta.${ext}
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+      
+# Linux Configuration
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  maintainer: VaultCRM Team
+  category: Office
+  desktop:
+    StartupWMClass: VaultCRM Beta
+    
+appImage:
+  artifactName: ${name}-${version}-beta.${ext}
+  
+deb:
+  artifactName: ${name}-${version}-beta.${ext}
+  depends:
+    - libsecret-1-0
+
+# Build settings
+npmRebuild: true
+asar: true
+asarUnpack:
+  - '**/*.node'
+  - '**/sql.js/**'
+
+# Beta update channel
+publish:
+  provider: generic
+  url: https://beta.releases.vaultcrm.app
+  channel: beta
+
+# Extra resources to include
+extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - '**/*'
+      - '!*.psd'

@@ -3,7 +3,7 @@ import { randomBytes, createHash } from 'crypto'
 import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { deriveKey, generateSalt } from '../database/sqlite/connection'
+import { generateSalt, rekeyDatabase } from '../database/sqlite/connection'
 
 const SERVICE_NAME = 'VaultCRM'
 const ACCOUNT_DB_KEY = 'db-encryption-key'
@@ -109,7 +109,7 @@ export async function unlockVault(masterPassword: string): Promise<Buffer> {
   return Buffer.from(dbKeyBase64, 'base64')
 }
 
-// Change master password
+// Change master password and rekey database
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   const config = loadVaultConfig()
   if (!config) {
@@ -124,16 +124,25 @@ export async function changePassword(currentPassword: string, newPassword: strin
     throw new Error('INVALID_PASSWORD')
   }
   
+  // Generate new database encryption key
+  const newDbKey = randomBytes(32)
+  
+  // Rekey the database with new key (atomic operation)
+  rekeyDatabase(newDbKey)
+  
+  // Store new db key in keychain
+  await keytar.setPassword(SERVICE_NAME, ACCOUNT_DB_KEY, newDbKey.toString('base64'))
+  
   // Generate new salt and hash for new password
   const newSalt = generateSalt()
   const newPasswordHash = hashPassword(newPassword, newSalt)
   
-  // Update config (db key stays the same)
+  // Update config
   config.salt = newSalt.toString('base64')
   config.passwordHash = newPasswordHash
   saveVaultConfig(config)
   
-  console.log('Password changed successfully')
+  console.log('Password changed and database rekeyed successfully')
 }
 
 // Get idle timeout setting

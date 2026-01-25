@@ -1,10 +1,13 @@
 import { writeFileSync, createWriteStream } from 'fs'
-import { join } from 'path'
+import { app } from 'electron'
 import Papa from 'papaparse'
 import { getAllContacts } from '../database/repositories/contacts'
-import { exportDatabaseBuffer, getDatabasePath } from '../database/sqlite/connection'
+import { exportEncryptedBuffer, getDatabasePath } from '../database/sqlite/connection'
 import { setLastBackupAt } from '../database/repositories/settings'
 import archiver from 'archiver'
+
+// Backup format version
+const BACKUP_FORMAT_VERSION = 2
 
 export async function exportToCsv(filePath: string): Promise<void> {
   const contacts = getAllContacts()
@@ -46,28 +49,33 @@ export async function backupDatabase(filePath: string): Promise<void> {
 
     archive.pipe(output)
 
-    // Add database file
+    // Add ENCRYPTED database file (never plaintext)
     try {
-      const dbBuffer = exportDatabaseBuffer()
-      archive.append(dbBuffer, { name: 'vaultcrm.db' })
-    } catch {
-      // If database export fails, try adding raw file
-      const dbPath = getDatabasePath()
-      if (dbPath) {
-        archive.file(dbPath, { name: 'vaultcrm.db' })
-      }
+      const encryptedBuffer = exportEncryptedBuffer()
+      archive.append(encryptedBuffer, { name: 'vaultcrm.db.enc' })
+    } catch (err) {
+      console.error('Failed to export encrypted database:', err)
+      reject(new Error('Failed to create encrypted backup'))
+      return
     }
 
-    // Add manifest with version info
+    // Add manifest with version and encryption info
     const manifest = {
-      version: '1.0.0',
-      format: 'vaultcrm_backup_v1',
+      version: app.getVersion(),
+      format: 'vaultcrm_backup',
+      format_version: BACKUP_FORMAT_VERSION,
       created_at: new Date().toISOString(),
-      storage_type: 'sqlite_encrypted'
+      storage_type: 'sqlite_encrypted',
+      encryption: {
+        algorithm: 'aes-256-gcm',
+        header: 'VCDB',
+        note: 'Database is encrypted with user master password key'
+      }
     }
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' })
 
-    // Export contacts as CSV for easy recovery
+    // Export contacts as CSV for emergency recovery (minimal data)
+    // Note: This is intentionally limited data for recovery purposes
     const contacts = getAllContacts()
     const csvData = contacts.map((contact) => ({
       id: contact.id,
@@ -84,10 +92,42 @@ export async function backupDatabase(filePath: string): Promise<void> {
       updated_at: contact.updated_at
     }))
     const csv = Papa.unparse(csvData)
-    archive.append(csv, { name: 'contacts_export.csv' })
+    archive.append(csv, { name: 'contacts_recovery.csv' })
 
     archive.finalize()
   })
+}
+
+// Restore database from encrypted backup
+export async function restoreFromBackup(
+  backupPath: string, 
+  extractedDbPath: string
+): Promise<{ success: boolean; error?: string }> {
+  // Note: This function assumes the backup has been unzipped and 
+  // the encrypted db file is at extractedDbPath
+  // The actual decryption happens in connection.ts when loading
+  try {
+    const { readFileSync, copyFileSync } = await import('fs')
+    const { join } = await import('path')
+    
+    const userDataPath = app.getPath('userData')
+    const dataDir = join(userDataPath, 'data')
+    const targetPath = join(dataDir, 'vaultcrm.db')
+    
+    // Create backup of current db before restore
+    const { existsSync } = await import('fs')
+    if (existsSync(targetPath)) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      copyFileSync(targetPath, join(dataDir, `vaultcrm.pre-restore-${timestamp}.db`))
+    }
+    
+    // Copy encrypted backup to target location
+    copyFileSync(extractedDbPath, targetPath)
+    
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: (error as Error).message }
+  }
 }
 
 function parseJsonArray(json: string | null): string[] {

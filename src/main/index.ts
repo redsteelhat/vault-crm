@@ -17,6 +17,16 @@ import { legacyDatabaseExists, migrateFromJson, getMigrationStatus } from './dat
 import { registerAllHandlers } from './ipc/handlers'
 import { startScheduler, stopScheduler, setDbReady } from './services/scheduler'
 import { setLastCleanExit } from './database/repositories/settings'
+import { 
+  initAutoUpdater, 
+  checkForUpdates, 
+  downloadUpdate, 
+  installUpdate,
+  getUpdateStatus,
+  setUpdateChannel,
+  setAutoCheck,
+  setAutoDownload
+} from './services/updater'
 
 let mainWindow: BrowserWindow | null = null
 let isUnlocked = false
@@ -254,12 +264,56 @@ app.whenReady().then(async () => {
   // Start follow-up scheduler (will only work when unlocked)
   startScheduler()
 
+  // Register update handlers
+  registerUpdateHandlers()
+
   createWindow()
+
+  // Initialize auto-updater after window is created
+  if (!is.dev && mainWindow) {
+    initAutoUpdater(mainWindow)
+  }
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
+
+// Register update-related IPC handlers
+function registerUpdateHandlers(): void {
+  ipcMain.handle('updater:getStatus', () => {
+    return getUpdateStatus()
+  })
+
+  ipcMain.handle('updater:checkForUpdates', async () => {
+    const result = await checkForUpdates(true)
+    return result ? { available: true, version: result.updateInfo?.version } : { available: false }
+  })
+
+  ipcMain.handle('updater:downloadUpdate', async () => {
+    await downloadUpdate()
+    return { success: true }
+  })
+
+  ipcMain.handle('updater:installUpdate', () => {
+    installUpdate()
+  })
+
+  ipcMain.handle('updater:setChannel', (_, channel: 'stable' | 'beta') => {
+    setUpdateChannel(channel)
+    return { success: true }
+  })
+
+  ipcMain.handle('updater:setAutoCheck', (_, enabled: boolean) => {
+    setAutoCheck(enabled)
+    return { success: true }
+  })
+
+  ipcMain.handle('updater:setAutoDownload', (_, enabled: boolean) => {
+    setAutoDownload(enabled)
+    return { success: true }
+  })
+}
 
 app.on('window-all-closed', () => {
   stopScheduler()

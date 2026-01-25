@@ -15,9 +15,12 @@
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
     "build:all": "electron-vite build && electron-builder --win --mac --linux",
+    "build:beta": "electron-vite build && electron-builder --win --mac --linux -c electron-builder.beta.yml",
     "lint": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:generate": "npx tsx scripts/generate-test-data.ts",
+    "test:benchmark": "npx tsx scripts/benchmark.ts"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^3.0.0",
@@ -38,6 +41,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^11.15.0",
+    "electron-updater": "^6.3.9",
     "keytar": "^7.9.0",
     "lucide-react": "^0.469.0",
     "papaparse": "^5.4.1",

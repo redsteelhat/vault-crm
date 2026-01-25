@@ -138,9 +138,70 @@ const api = {
     getDataPath: (): Promise<string> => ipcRenderer.invoke('app:getDataPath')
   },
 
+  // Diagnostics
+  diagnostics: {
+    getSummary: (): Promise<{
+      app: Record<string, string | boolean>
+      system: Record<string, string | number>
+      database: { contacts: number; interactions: number; followups: number; tags: number }
+      errors: number
+    }> => ipcRenderer.invoke('diagnostics:getSummary'),
+    export: (): Promise<{ success: boolean; path?: string; cancelled?: boolean; error?: string }> =>
+      ipcRenderer.invoke('diagnostics:export'),
+    logError: (error: string, context?: string): Promise<void> =>
+      ipcRenderer.invoke('diagnostics:logError', error, context)
+  },
+
+  // Recovery / Safe Mode
+  recovery: {
+    getSafeModeStatus: (): Promise<{ active: boolean; reason: string; backupCount: number }> =>
+      ipcRenderer.invoke('recovery:getSafeModeStatus'),
+    getBackups: (): Promise<{ path: string; date: string; size: number }[]> =>
+      ipcRenderer.invoke('recovery:getBackups'),
+    restoreBackup: (backupPath: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('recovery:restoreBackup', backupPath),
+    resetDatabase: (): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('recovery:resetDatabase'),
+    exitSafeMode: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('recovery:exitSafeMode')
+  },
+
+  // Auto-updater
+  updater: {
+    getStatus: (): Promise<{
+      currentVersion: string
+      channel: 'stable' | 'beta'
+      autoCheck: boolean
+      autoDownload: boolean
+      lastCheck: string | null
+    }> => ipcRenderer.invoke('updater:getStatus'),
+    checkForUpdates: (): Promise<{ available: boolean; version?: string }> =>
+      ipcRenderer.invoke('updater:checkForUpdates'),
+    downloadUpdate: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('updater:downloadUpdate'),
+    installUpdate: (): Promise<void> =>
+      ipcRenderer.invoke('updater:installUpdate'),
+    setChannel: (channel: 'stable' | 'beta'): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('updater:setChannel', channel),
+    setAutoCheck: (enabled: boolean): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('updater:setAutoCheck', enabled),
+    setAutoDownload: (enabled: boolean): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('updater:setAutoDownload', enabled)
+  },
+
   // Events
   on: (channel: string, callback: (...args: unknown[]) => void) => {
-    const allowedChannels = ['vault:locked', 'followup:reminder', 'notification:click']
+    const allowedChannels = [
+      'vault:locked', 
+      'followup:reminder', 
+      'notification:click',
+      'update:checking',
+      'update:available',
+      'update:not-available',
+      'update:progress',
+      'update:downloaded',
+      'update:error'
+    ]
     if (!allowedChannels.includes(channel)) {
       console.warn(`Channel ${channel} is not allowed`)
       return () => {}
