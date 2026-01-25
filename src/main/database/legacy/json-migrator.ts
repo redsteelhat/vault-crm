@@ -1,7 +1,10 @@
 import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, readFileSync, renameSync, mkdirSync } from 'fs'
-import { run, transaction, saveDatabase } from '../sqlite/connection'
+import { run, transaction, saveDatabase, queryOne } from '../sqlite/connection'
+
+// Migration version constant
+export const JSON_MIGRATION_VERSION = 1
 
 interface LegacyDatabase {
   contacts: Record<string, LegacyContact>
@@ -107,8 +110,42 @@ function archiveLegacyDatabase(): void {
   console.log('Legacy database archived to:', archivePath)
 }
 
+// Check if migration was already completed
+function isMigrationCompleted(): boolean {
+  try {
+    const result = queryOne<{ value: string }>(
+      'SELECT value FROM settings WHERE key = ?',
+      ['migration_completed']
+    )
+    return result?.value === 'true'
+  } catch {
+    return false
+  }
+}
+
+// Set migration completed flag
+function setMigrationCompleted(): void {
+  run(`
+    INSERT INTO settings (key, value) VALUES ('migration_completed', 'true')
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `)
+  run(`
+    INSERT INTO settings (key, value) VALUES ('migration_completed_at', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `, [new Date().toISOString()])
+}
+
 // Migrate data from JSON to SQLite
 export function migrateFromJson(): MigrationResult {
+  // Check if migration was already completed
+  if (isMigrationCompleted()) {
+    console.log('Migration already completed, skipping.')
+    return {
+      success: true,
+      stats: { contacts: 0, interactions: 0, tags: 0, contactTags: 0, followups: 0 }
+    }
+  }
+  
   const legacy = loadLegacyDatabase()
   
   if (!legacy) {
@@ -233,6 +270,9 @@ export function migrateFromJson(): MigrationResult {
         INSERT INTO settings (key, value) VALUES ('storage_version', 'v1_sqlite')
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
       `)
+      
+      // Set migration completed flag to prevent duplicate migrations
+      setMigrationCompleted()
     })
     
     // Save and archive
@@ -256,6 +296,12 @@ export function migrateFromJson(): MigrationResult {
 
 // Get migration status
 export function getMigrationStatus(): 'not_needed' | 'pending' | 'completed' {
+  // First check if migration was explicitly marked as completed
+  if (isMigrationCompleted()) {
+    return 'completed'
+  }
+  
+  // If no legacy database exists, migration is not needed
   if (!legacyDatabaseExists()) {
     return 'not_needed'
   }
@@ -269,4 +315,32 @@ export function getMigrationStatus(): 'not_needed' | 'pending' | 'completed' {
   }
   
   return 'pending'
+}
+
+// Get migration details
+export function getMigrationDetails(): {
+  status: 'not_needed' | 'pending' | 'completed'
+  completedAt?: string
+  legacyExists: boolean
+} {
+  const status = getMigrationStatus()
+  const legacyExists = legacyDatabaseExists()
+  
+  if (status === 'completed') {
+    try {
+      const result = queryOne<{ value: string }>(
+        'SELECT value FROM settings WHERE key = ?',
+        ['migration_completed_at']
+      )
+      return {
+        status,
+        completedAt: result?.value,
+        legacyExists
+      }
+    } catch {
+      return { status, legacyExists }
+    }
+  }
+  
+  return { status, legacyExists }
 }

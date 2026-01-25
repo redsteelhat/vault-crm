@@ -32,3 +32,6 @@ Thumbs.db
 
 # Electron builder
 release/
+
+# License keys (private)
+.keys/

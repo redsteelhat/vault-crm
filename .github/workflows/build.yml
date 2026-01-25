@@ -139,6 +139,56 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
 
+      - name: Generate SHA256 checksums
+        run: |
+          cd artifacts
+          echo "## SHA256 Checksums" > ../CHECKSUMS.txt
+          echo "" >> ../CHECKSUMS.txt
+          echo "Verify your download by comparing the SHA256 hash:" >> ../CHECKSUMS.txt
+          echo '```' >> ../CHECKSUMS.txt
+          
+          # Windows
+          if [ -d "vaultcrm-windows" ]; then
+            for file in vaultcrm-windows/*.exe; do
+              if [ -f "$file" ]; then
+                echo "$(sha256sum "$file" | awk '{print $1}')  $(basename $file)" >> ../CHECKSUMS.txt
+              fi
+            done
+          fi
+          
+          # macOS
+          if [ -d "vaultcrm-macos" ]; then
+            for file in vaultcrm-macos/*.dmg vaultcrm-macos/*.zip; do
+              if [ -f "$file" ]; then
+                echo "$(sha256sum "$file" | awk '{print $1}')  $(basename $file)" >> ../CHECKSUMS.txt
+              fi
+            done
+          fi
+          
+          # Linux
+          if [ -d "vaultcrm-linux" ]; then
+            for file in vaultcrm-linux/*.AppImage vaultcrm-linux/*.deb vaultcrm-linux/*.rpm; do
+              if [ -f "$file" ]; then
+                echo "$(sha256sum "$file" | awk '{print $1}')  $(basename $file)" >> ../CHECKSUMS.txt
+              fi
+            done
+          fi
+          
+          echo '```' >> ../CHECKSUMS.txt
+          echo "" >> ../CHECKSUMS.txt
+          echo "To verify on:" >> ../CHECKSUMS.txt
+          echo "- **Windows (PowerShell)**: \`Get-FileHash -Algorithm SHA256 filename.exe\`" >> ../CHECKSUMS.txt
+          echo "- **macOS/Linux**: \`sha256sum filename\` or \`shasum -a 256 filename\`" >> ../CHECKSUMS.txt
+          
+          cat ../CHECKSUMS.txt
+          
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: CHECKSUMS.txt
+          retention-days: 30
+
       - name: Determine release channel
         id: channel
         run: |
@@ -172,21 +222,37 @@ jobs:
             artifacts/vaultcrm-windows/*
             artifacts/vaultcrm-macos/*
             artifacts/vaultcrm-linux/*
-          body: |
-            ## VaultCRM v${{ steps.version.outputs.version }} (Beta)
-            
-            This is a **beta release** for testing. Not recommended for production use.
-            
-            ### Downloads
-            - **Windows**: `VaultCRM-${{ steps.version.outputs.version }}-setup.exe`
-            - **macOS**: `VaultCRM-${{ steps.version.outputs.version }}.dmg` (Intel & Apple Silicon)
-            - **Linux**: `VaultCRM-${{ steps.version.outputs.version }}.AppImage`
-            
-            ### What's New
-            - See [CHANGELOG.md](CHANGELOG.md) for details
-            
-            ### Feedback
-            Please report issues at: https://github.com/${{ github.repository }}/issues
+            CHECKSUMS.txt
+          body_path: CHECKSUMS.txt
+          append_body: true
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add beta release notes
+        if: steps.channel.outputs.channel == 'beta'
+        run: |
+          cat > RELEASE_BODY.md << 'EOF'
+          ## VaultCRM v${{ steps.version.outputs.version }} (Beta)
+          
+          This is a **beta release** for testing. Not recommended for production use.
+          
+          ### Downloads
+          - **Windows**: `VaultCRM-${{ steps.version.outputs.version }}-setup.exe`
+          - **macOS**: `VaultCRM-${{ steps.version.outputs.version }}.dmg` (Intel & Apple Silicon)
+          - **Linux**: `VaultCRM-${{ steps.version.outputs.version }}.AppImage`
+          
+          ### What's New
+          - See [CHANGELOG.md](CHANGELOG.md) for details
+          
+          ### Feedback
+          Please report issues at: https://github.com/${{ github.repository }}/issues
+          
+          ---
+          
+          EOF
+          cat CHECKSUMS.txt >> RELEASE_BODY.md
+          echo "Release body created"
 
       - name: Create Release (Stable)
         if: steps.channel.outputs.channel == 'stable'
@@ -200,24 +266,37 @@ jobs:
             artifacts/vaultcrm-windows/*
             artifacts/vaultcrm-macos/*
             artifacts/vaultcrm-linux/*
-          body: |
-            ## VaultCRM v${{ steps.version.outputs.version }}
-            
-            ### Downloads
-            - **Windows**: `VaultCRM-${{ steps.version.outputs.version }}-setup.exe`
-            - **macOS**: `VaultCRM-${{ steps.version.outputs.version }}.dmg` (Intel & Apple Silicon)
-            - **Linux**: `VaultCRM-${{ steps.version.outputs.version }}.AppImage`
-            
-            ### What's New
-            - See [CHANGELOG.md](CHANGELOG.md) for details
-            
-            ### Installation
-            1. Download the appropriate file for your operating system
-            2. Run the installer
-            3. Create your master password to encrypt your data
-            
-            ### Privacy
-            VaultCRM is a local-first application. All data stays on your device.
+            CHECKSUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add stable release notes
+        if: steps.channel.outputs.channel == 'stable'
+        run: |
+          cat > RELEASE_BODY.md << 'EOF'
+          ## VaultCRM v${{ steps.version.outputs.version }}
+          
+          ### Downloads
+          - **Windows**: `VaultCRM-${{ steps.version.outputs.version }}-setup.exe`
+          - **macOS**: `VaultCRM-${{ steps.version.outputs.version }}.dmg` (Intel & Apple Silicon)
+          - **Linux**: `VaultCRM-${{ steps.version.outputs.version }}.AppImage`
+          
+          ### What's New
+          - See [CHANGELOG.md](CHANGELOG.md) for details
+          
+          ### Installation
+          1. Download the appropriate file for your operating system
+          2. Run the installer
+          3. Create your master password to encrypt your data
+          
+          ### Privacy
+          VaultCRM is a local-first application. All data stays on your device.
+          
+          ---
+          
+          EOF
+          cat CHECKSUMS.txt >> RELEASE_BODY.md
+          echo "Release body created"
 
   # Update check job - updates the update manifest for auto-updater
   update-manifest:
