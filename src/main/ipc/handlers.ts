@@ -28,6 +28,7 @@ import {
   runAutoBackup, 
   deleteBackup 
 } from '../services/auto-backup'
+import { seedMockData } from '../database/seed-mock-data'
 import {
   getFeatureGates,
   getTierInfo,
@@ -887,6 +888,11 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
 
   ipcMain.handle('ai:meetingPrep', async (_, context: { contactName: string; company?: string; meetingPurpose?: string; recentNotes?: string[] }) => {
     return aiService.generateMeetingPrep(context)
+  })
+
+  // Dev Tools - Mock Data Seeder
+  ipcMain.handle('dev:seedMockData', async () => {
+    return seedMockData()
   })
 }
 

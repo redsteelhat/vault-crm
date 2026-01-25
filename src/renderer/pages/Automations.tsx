@@ -303,17 +303,17 @@ export default function Automations() {
             <div className="space-y-2">
               <Label>{t('pipeline.stage')} (from)</Label>
               <Select
-                value={ruleForm.trigger_config.fromStage || ''}
+                value={ruleForm.trigger_config.fromStage || '_any'}
                 onValueChange={(value) => setRuleForm(prev => ({
                   ...prev,
-                  trigger_config: { ...prev.trigger_config, fromStage: value }
+                  trigger_config: { ...prev.trigger_config, fromStage: value === '_any' ? '' : value }
                 }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={t('common.any')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t('common.any')}</SelectItem>
+                  <SelectItem value="_any">{t('common.any')}</SelectItem>
                   {stages.map(stage => (
                     <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
                   ))}
@@ -323,17 +323,17 @@ export default function Automations() {
             <div className="space-y-2">
               <Label>{t('pipeline.stage')} (to)</Label>
               <Select
-                value={ruleForm.trigger_config.toStage || ''}
+                value={ruleForm.trigger_config.toStage || '_any'}
                 onValueChange={(value) => setRuleForm(prev => ({
                   ...prev,
-                  trigger_config: { ...prev.trigger_config, toStage: value }
+                  trigger_config: { ...prev.trigger_config, toStage: value === '_any' ? '' : value }
                 }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={t('common.any')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t('common.any')}</SelectItem>
+                  <SelectItem value="_any">{t('common.any')}</SelectItem>
                   {stages.map(stage => (
                     <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
                   ))}

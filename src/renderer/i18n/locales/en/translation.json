@@ -370,7 +370,14 @@
     "hour": "hour",
     "never": "Never",
     "enabled": "Enabled",
-    "disabled": "Disabled"
+    "disabled": "Disabled",
+    "devTools": "Developer Tools",
+    "devToolsDesc": "Tools for testing and development",
+    "seedMockData": "Generate Mock Data",
+    "seedMockDataDesc": "Create sample contacts, deals, tasks, and more for testing all platform features",
+    "seedData": "Generate Data",
+    "seedSuccess": "Mock data generated successfully!",
+    "interactions": "interactions"
   },
   "vault": {
     "title": "VaultCRM",

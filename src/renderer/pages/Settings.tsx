@@ -58,6 +58,9 @@ export function Settings() {
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(true)
   const [backupFrequency, setBackupFrequency] = useState<'daily' | 'weekly'>('daily')
   const [maxBackups, setMaxBackups] = useState(10)
+
+  // Dev Tools
+  const [isSeedingData, setIsSeedingData] = useState(false)
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null)
   const [backupList, setBackupList] = useState<Array<{ name: string; path: string; date: string; sizeKB: number }>>([])
   const [isRunningBackup, setIsRunningBackup] = useState(false)
@@ -224,6 +227,30 @@ export function Settings() {
     toast({ title: 'Opening email client...' })
     setShowFeedbackDialog(false)
     setFeedbackText('')
+  }
+
+  const handleSeedMockData = async () => {
+    setIsSeedingData(true)
+    try {
+      const result = await window.api.dev.seedMockData()
+      if (result.success) {
+        const { stats } = result
+        toast({ 
+          title: t('settings.seedSuccess'),
+          description: `${stats.contacts} ${t('contacts.title')}, ${stats.interactions} ${t('settings.interactions')}, ${stats.deals} ${t('pipeline.title')}, ${stats.tasks} ${t('tasks.title')}`
+        })
+        // Refresh contacts
+        window.location.reload()
+      }
+    } catch (error) {
+      toast({ 
+        title: t('common.error'), 
+        description: String(error),
+        variant: 'destructive' 
+      })
+    } finally {
+      setIsSeedingData(false)
+    }
   }
 
   const handleIdleTimeoutChange = async (value: string) => {
@@ -913,6 +940,43 @@ export function Settings() {
                 <p className="font-medium">VaultCRM - {t('settings.aboutTagline')}</p>
                 <p className="mt-1">{t('settings.aboutDesc')}</p>
                 <p className="mt-4">{t('settings.copyright', { year: new Date().getFullYear() })}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Developer Tools */}
+          <Card className="border-none shadow-sm border-l-4 border-l-amber-500">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bug className="h-5 w-5" />
+                {t('settings.devTools')}
+              </CardTitle>
+              <CardDescription>
+                {t('settings.devToolsDesc')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-lg bg-amber-500/10">
+                  <div>
+                    <p className="font-medium">{t('settings.seedMockData')}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t('settings.seedMockDataDesc')}
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={handleSeedMockData} 
+                    disabled={isSeedingData}
+                    variant="outline"
+                  >
+                    {isSeedingData ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Database className="h-4 w-4 mr-2" />
+                    )}
+                    {t('settings.seedData')}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

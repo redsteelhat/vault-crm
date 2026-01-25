@@ -128,12 +128,15 @@ export const useContactStore = create<ContactStore>((set, get) => ({
   deleteContact: async (id) => {
     try {
       await window.api.contacts.delete(id)
+      // Remove from local state
       const contacts = get().contacts.filter((c) => c.id !== id)
       set({ contacts })
+      // Clear selection if deleted contact was selected
       if (get().selectedContact?.id === id) {
         set({ selectedContact: null, selectedContactTags: [] })
       }
     } catch (error) {
+      console.error('Failed to delete contact:', error)
       set({ error: (error as Error).message })
       throw error
     }

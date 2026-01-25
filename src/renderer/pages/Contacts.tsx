@@ -324,7 +324,10 @@ export function Contacts() {
           next.delete(id)
           return next
         })
-      } catch {
+        // Refresh contacts list to ensure UI is updated
+        await fetchContacts()
+      } catch (error) {
+        console.error('Failed to delete contact:', error)
         toast({ title: t('errors.deleteFailed'), variant: 'destructive' })
       }
     }

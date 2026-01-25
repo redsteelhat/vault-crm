@@ -370,7 +370,14 @@
     "hour": "saat",
     "never": "Asla",
     "enabled": "Açık",
-    "disabled": "Kapalı"
+    "disabled": "Kapalı",
+    "devTools": "Geliştirici Araçları",
+    "devToolsDesc": "Test ve geliştirme araçları",
+    "seedMockData": "Örnek Veri Oluştur",
+    "seedMockDataDesc": "Platformun tüm özelliklerini test etmek için örnek kişiler, fırsatlar, görevler ve daha fazlasını oluşturun",
+    "seedData": "Veri Oluştur",
+    "seedSuccess": "Örnek veriler başarıyla oluşturuldu!",
+    "interactions": "etkileşim"
   },
   "vault": {
     "title": "VaultCRM",

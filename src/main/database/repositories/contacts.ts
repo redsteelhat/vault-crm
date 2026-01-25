@@ -97,7 +97,11 @@ export function updateContact(id: string, data: Partial<Contact>): Contact | nul
 export function deleteContact(id: string): void {
   // Soft delete
   const now = new Date().toISOString()
-  run('UPDATE contacts SET deleted_at = ? WHERE id = ?', [now, id])
+  const result = run('UPDATE contacts SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL', [now, id])
+  
+  if (result.changes === 0) {
+    throw new Error(`Contact with id ${id} not found or already deleted`)
+  }
 }
 
 export function hardDeleteContact(id: string): void {

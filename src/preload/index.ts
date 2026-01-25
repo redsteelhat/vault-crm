@@ -478,6 +478,12 @@ const api = {
       ipcRenderer.invoke('enrichment:guessCompany', domain)
   },
 
+  // Dev Tools
+  dev: {
+    seedMockData: (): Promise<{ success: boolean; stats: Record<string, number> }> =>
+      ipcRenderer.invoke('dev:seedMockData')
+  },
+
   // Events
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const allowedChannels = [
