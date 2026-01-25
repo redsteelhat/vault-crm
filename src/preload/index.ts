@@ -1,5 +1,21 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Contact, Interaction, Tag, FollowUp, Settings } from '../main/database/types'
+import type { 
+  Contact, 
+  Interaction, 
+  Tag, 
+  FollowUp, 
+  Settings,
+  Pipeline,
+  PipelineStage,
+  Deal,
+  DealWithContact,
+  Task,
+  TaskWithRelations,
+  CustomFieldDefinition,
+  CustomFieldValue,
+  AutomationRule,
+  AutomationTriggerType
+} from '../main/database/types'
 
 // API exposed to renderer
 const api = {
@@ -302,6 +318,164 @@ const api = {
       ipcRenderer.invoke('updater:setAutoCheck', enabled),
     setAutoDownload: (enabled: boolean): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('updater:setAutoDownload', enabled)
+  },
+
+  // Pipelines
+  pipelines: {
+    getAll: (): Promise<Pipeline[]> => ipcRenderer.invoke('pipelines:getAll'),
+    getById: (id: string): Promise<Pipeline | null> => ipcRenderer.invoke('pipelines:getById', id),
+    getDefault: (): Promise<Pipeline | null> => ipcRenderer.invoke('pipelines:getDefault'),
+    create: (data: { name: string; stages?: PipelineStage[] }): Promise<Pipeline> =>
+      ipcRenderer.invoke('pipelines:create', data),
+    update: (id: string, data: Partial<{ name: string; stages: PipelineStage[] }>): Promise<Pipeline | null> =>
+      ipcRenderer.invoke('pipelines:update', id, data),
+    delete: (id: string): Promise<boolean> => ipcRenderer.invoke('pipelines:delete', id),
+    setDefault: (id: string): Promise<boolean> => ipcRenderer.invoke('pipelines:setDefault', id),
+    getStages: (pipelineId: string): Promise<PipelineStage[]> =>
+      ipcRenderer.invoke('pipelines:getStages', pipelineId),
+    getStats: (pipelineId: string): Promise<{
+      totalDeals: number
+      totalValue: number
+      byStage: { stage: string; count: number; value: number }[]
+    }> => ipcRenderer.invoke('pipelines:getStats', pipelineId)
+  },
+
+  // Deals
+  deals: {
+    getAll: (pipelineId?: string): Promise<DealWithContact[]> =>
+      ipcRenderer.invoke('deals:getAll', pipelineId),
+    getById: (id: string): Promise<DealWithContact | null> =>
+      ipcRenderer.invoke('deals:getById', id),
+    getByContact: (contactId: string): Promise<DealWithContact[]> =>
+      ipcRenderer.invoke('deals:getByContact', contactId),
+    getByStage: (pipelineId: string, stage: string): Promise<DealWithContact[]> =>
+      ipcRenderer.invoke('deals:getByStage', pipelineId, stage),
+    create: (data: Omit<Deal, 'id' | 'created_at' | 'updated_at' | 'closed_at' | 'won' | 'deleted_at'>): Promise<Deal> =>
+      ipcRenderer.invoke('deals:create', data),
+    update: (id: string, data: Partial<Deal>): Promise<Deal | null> =>
+      ipcRenderer.invoke('deals:update', id, data),
+    moveToStage: (id: string, stage: string): Promise<Deal | null> =>
+      ipcRenderer.invoke('deals:moveToStage', id, stage),
+    close: (id: string, won: boolean): Promise<Deal | null> =>
+      ipcRenderer.invoke('deals:close', id, won),
+    reopen: (id: string, stage: string): Promise<Deal | null> =>
+      ipcRenderer.invoke('deals:reopen', id, stage),
+    delete: (id: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('deals:delete', id),
+    getCount: (pipelineId?: string): Promise<number> =>
+      ipcRenderer.invoke('deals:getCount', pipelineId),
+    getOpenValue: (pipelineId?: string): Promise<number> =>
+      ipcRenderer.invoke('deals:getOpenValue', pipelineId),
+    getClosedStats: (pipelineId?: string, days?: number): Promise<{
+      won: { count: number; value: number }
+      lost: { count: number; value: number }
+      winRate: number
+    }> => ipcRenderer.invoke('deals:getClosedStats', pipelineId, days),
+    getExpectedClose: (pipelineId?: string): Promise<DealWithContact[]> =>
+      ipcRenderer.invoke('deals:getExpectedClose', pipelineId),
+    getWeightedValue: (pipelineId?: string): Promise<number> =>
+      ipcRenderer.invoke('deals:getWeightedValue', pipelineId)
+  },
+
+  // Tasks
+  tasks: {
+    getAll: (): Promise<TaskWithRelations[]> => ipcRenderer.invoke('tasks:getAll'),
+    getById: (id: string): Promise<TaskWithRelations | null> =>
+      ipcRenderer.invoke('tasks:getById', id),
+    getByContact: (contactId: string): Promise<TaskWithRelations[]> =>
+      ipcRenderer.invoke('tasks:getByContact', contactId),
+    getByDeal: (dealId: string): Promise<TaskWithRelations[]> =>
+      ipcRenderer.invoke('tasks:getByDeal', dealId),
+    getOpen: (): Promise<TaskWithRelations[]> => ipcRenderer.invoke('tasks:getOpen'),
+    getToday: (): Promise<TaskWithRelations[]> => ipcRenderer.invoke('tasks:getToday'),
+    getOverdue: (): Promise<TaskWithRelations[]> => ipcRenderer.invoke('tasks:getOverdue'),
+    getUpcoming: (days?: number): Promise<TaskWithRelations[]> =>
+      ipcRenderer.invoke('tasks:getUpcoming', days),
+    create: (data: Omit<Task, 'id' | 'created_at' | 'completed_at' | 'deleted_at'>): Promise<Task> =>
+      ipcRenderer.invoke('tasks:create', data),
+    update: (id: string, data: Partial<Task>): Promise<Task | null> =>
+      ipcRenderer.invoke('tasks:update', id, data),
+    complete: (id: string): Promise<Task | null> => ipcRenderer.invoke('tasks:complete', id),
+    reopen: (id: string): Promise<Task | null> => ipcRenderer.invoke('tasks:reopen', id),
+    cancel: (id: string): Promise<Task | null> => ipcRenderer.invoke('tasks:cancel', id),
+    delete: (id: string): Promise<{ success: boolean }> => ipcRenderer.invoke('tasks:delete', id),
+    getCount: (): Promise<{ open: number; overdue: number; completed: number }> =>
+      ipcRenderer.invoke('tasks:getCount'),
+    getForAgenda: (date: string): Promise<TaskWithRelations[]> =>
+      ipcRenderer.invoke('tasks:getForAgenda', date)
+  },
+
+  // Custom Fields
+  customFields: {
+    getDefinitions: (entityType?: 'contact' | 'deal' | 'task'): Promise<CustomFieldDefinition[]> =>
+      ipcRenderer.invoke('customFields:getDefinitions', entityType),
+    getDefinitionById: (id: string): Promise<CustomFieldDefinition | null> =>
+      ipcRenderer.invoke('customFields:getDefinitionById', id),
+    createDefinition: (data: Omit<CustomFieldDefinition, 'id' | 'created_at'>): Promise<CustomFieldDefinition> =>
+      ipcRenderer.invoke('customFields:createDefinition', data),
+    updateDefinition: (id: string, data: Partial<CustomFieldDefinition>): Promise<CustomFieldDefinition | null> =>
+      ipcRenderer.invoke('customFields:updateDefinition', id, data),
+    deleteDefinition: (id: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('customFields:deleteDefinition', id),
+    reorderDefinitions: (entityType: string, orderedIds: string[]): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('customFields:reorderDefinitions', entityType, orderedIds),
+    getValues: (entityId: string): Promise<CustomFieldValue[]> =>
+      ipcRenderer.invoke('customFields:getValues', entityId),
+    getValuesWithDefinitions: (entityId: string): Promise<(CustomFieldValue & CustomFieldDefinition)[]> =>
+      ipcRenderer.invoke('customFields:getValuesWithDefinitions', entityId),
+    setValue: (entityId: string, fieldId: string, value: string | null): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('customFields:setValue', entityId, fieldId, value),
+    setValues: (entityId: string, values: Record<string, string | null>): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('customFields:setValues', entityId, values),
+    deleteValues: (entityId: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('customFields:deleteValues', entityId)
+  },
+
+  // Automations
+  automations: {
+    getAll: (): Promise<AutomationRule[]> => ipcRenderer.invoke('automations:getAll'),
+    getEnabled: (): Promise<AutomationRule[]> => ipcRenderer.invoke('automations:getEnabled'),
+    getById: (id: string): Promise<AutomationRule | null> => ipcRenderer.invoke('automations:getById', id),
+    getByTrigger: (triggerType: AutomationTriggerType): Promise<AutomationRule[]> =>
+      ipcRenderer.invoke('automations:getByTrigger', triggerType),
+    create: (data: Omit<AutomationRule, 'id' | 'run_count' | 'last_run_at' | 'created_at'>): Promise<AutomationRule> =>
+      ipcRenderer.invoke('automations:create', data),
+    update: (id: string, data: Partial<AutomationRule>): Promise<AutomationRule | null> =>
+      ipcRenderer.invoke('automations:update', id, data),
+    toggle: (id: string, enabled: boolean): Promise<AutomationRule | null> =>
+      ipcRenderer.invoke('automations:toggle', id, enabled),
+    delete: (id: string): Promise<{ success: boolean }> => ipcRenderer.invoke('automations:delete', id),
+    getStats: (): Promise<{
+      total: number
+      enabled: number
+      totalRuns: number
+      byTrigger: { trigger_type: string; count: number }[]
+      byAction: { action_type: string; count: number }[]
+    }> => ipcRenderer.invoke('automations:getStats')
+  },
+
+  // Enrichment
+  enrichment: {
+    enrichContact: (contactId: string): Promise<{
+      favicon?: string
+      logo?: string
+      companyName?: string
+      domain?: string
+    }> => ipcRenderer.invoke('enrichment:enrichContact', contactId),
+    batchEnrich: (contactIds: string[]): Promise<Record<string, {
+      favicon?: string
+      logo?: string
+      companyName?: string
+      domain?: string
+    }>> => ipcRenderer.invoke('enrichment:batchEnrich', contactIds),
+    getFaviconUrl: (domain: string): Promise<string> =>
+      ipcRenderer.invoke('enrichment:getFaviconUrl', domain),
+    getLogoUrl: (domain: string): Promise<string> =>
+      ipcRenderer.invoke('enrichment:getLogoUrl', domain),
+    extractDomain: (email: string): Promise<string | null> =>
+      ipcRenderer.invoke('enrichment:extractDomain', email),
+    guessCompany: (domain: string): Promise<string> =>
+      ipcRenderer.invoke('enrichment:guessCompany', domain)
   },
 
   // Events

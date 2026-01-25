@@ -8,6 +8,10 @@ import { FollowUps } from './pages/FollowUps'
 import { Import } from './pages/Import'
 import { Settings } from './pages/Settings'
 import { SmartLists } from './pages/SmartLists'
+import Pipeline from './pages/Pipeline'
+import Tasks from './pages/Tasks'
+import Automations from './pages/Automations'
+import Reports from './pages/Reports'
 import { Unlock } from './pages/Unlock'
 import { Toaster } from './components/ui/toaster'
 import { CommandPalette } from './components/CommandPalette'
@@ -66,6 +70,10 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/contacts/:id" element={<ContactDetail />} />
+          <Route path="/pipeline" element={<Pipeline />} />
+          <Route path="/tasks" element={<Tasks />} />
+          <Route path="/automations" element={<Automations />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="/followups" element={<FollowUps />} />
           <Route path="/smart-lists" element={<SmartLists />} />
           <Route path="/import" element={<Import />} />

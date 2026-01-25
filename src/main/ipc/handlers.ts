@@ -6,6 +6,16 @@ import * as interactionsRepo from '../database/repositories/interactions'
 import * as tagsRepo from '../database/repositories/tags'
 import * as followupsRepo from '../database/repositories/followups'
 import * as settingsRepo from '../database/repositories/settings'
+import * as pipelinesRepo from '../database/repositories/pipelines'
+import * as dealsRepo from '../database/repositories/deals'
+import * as tasksRepo from '../database/repositories/tasks'
+import * as customFieldsRepo from '../database/repositories/custom-fields'
+import * as automationsRepo from '../database/repositories/automations'
+import * as templatesRepo from '../database/repositories/templates'
+import * as enrichmentService from '../services/enrichment'
+import * as aiService from '../services/ai-assistant'
+import * as gmailSync from '../services/gmail-sync'
+import * as outlookSync from '../services/outlook-sync'
 import { importCsv, previewCsv } from '../services/importer'
 import { exportToCsv, backupDatabase } from '../services/exporter'
 import { getDatabasePath } from '../database/sqlite/connection'
@@ -27,6 +37,14 @@ import {
   getTierComparison,
   recordUpgradePromptShown
 } from '../services/feature-gates'
+import type { 
+  PipelineStage, 
+  Deal, 
+  Task,
+  CustomFieldDefinition,
+  AutomationRule,
+  AutomationTriggerType
+} from '../database/types'
 
 export function registerAllHandlers(ipcMain: IpcMain): void {
   // === CONTACTS ===
@@ -424,6 +442,451 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('tier:recordPromptShown', (_, feature: string) => {
     recordUpgradePromptShown(feature)
     return { success: true }
+  })
+
+  // === PIPELINES ===
+  ipcMain.handle('pipelines:getAll', () => {
+    return pipelinesRepo.getAllPipelines()
+  })
+
+  ipcMain.handle('pipelines:getById', (_, id: string) => {
+    return pipelinesRepo.getPipelineById(id)
+  })
+
+  ipcMain.handle('pipelines:getDefault', () => {
+    return pipelinesRepo.getDefaultPipeline()
+  })
+
+  ipcMain.handle('pipelines:create', (_, data: { name: string; stages?: PipelineStage[] }) => {
+    return pipelinesRepo.createPipeline(data)
+  })
+
+  ipcMain.handle('pipelines:update', (_, id: string, data: Partial<{ name: string; stages: PipelineStage[] }>) => {
+    return pipelinesRepo.updatePipeline(id, data)
+  })
+
+  ipcMain.handle('pipelines:delete', (_, id: string) => {
+    return pipelinesRepo.deletePipeline(id)
+  })
+
+  ipcMain.handle('pipelines:setDefault', (_, id: string) => {
+    return pipelinesRepo.setDefaultPipeline(id)
+  })
+
+  ipcMain.handle('pipelines:getStages', (_, pipelineId: string) => {
+    return pipelinesRepo.getPipelineStages(pipelineId)
+  })
+
+  ipcMain.handle('pipelines:getStats', (_, pipelineId: string) => {
+    return pipelinesRepo.getPipelineStats(pipelineId)
+  })
+
+  // === DEALS ===
+  ipcMain.handle('deals:getAll', (_, pipelineId?: string) => {
+    return dealsRepo.getAllDeals(pipelineId)
+  })
+
+  ipcMain.handle('deals:getById', (_, id: string) => {
+    return dealsRepo.getDealById(id)
+  })
+
+  ipcMain.handle('deals:getByContact', (_, contactId: string) => {
+    return dealsRepo.getDealsByContact(contactId)
+  })
+
+  ipcMain.handle('deals:getByStage', (_, pipelineId: string, stage: string) => {
+    return dealsRepo.getDealsByStage(pipelineId, stage)
+  })
+
+  ipcMain.handle('deals:create', (_, data: Omit<Deal, 'id' | 'created_at' | 'updated_at' | 'closed_at' | 'won' | 'deleted_at'>) => {
+    return dealsRepo.createDeal(data)
+  })
+
+  ipcMain.handle('deals:update', (_, id: string, data: Partial<Deal>) => {
+    return dealsRepo.updateDeal(id, data)
+  })
+
+  ipcMain.handle('deals:moveToStage', (_, id: string, stage: string) => {
+    return dealsRepo.moveDealToStage(id, stage)
+  })
+
+  ipcMain.handle('deals:close', (_, id: string, won: boolean) => {
+    return dealsRepo.closeDeal(id, won)
+  })
+
+  ipcMain.handle('deals:reopen', (_, id: string, stage: string) => {
+    return dealsRepo.reopenDeal(id, stage)
+  })
+
+  ipcMain.handle('deals:delete', (_, id: string) => {
+    dealsRepo.deleteDeal(id)
+    return { success: true }
+  })
+
+  ipcMain.handle('deals:getCount', (_, pipelineId?: string) => {
+    return dealsRepo.getDealCount(pipelineId)
+  })
+
+  ipcMain.handle('deals:getOpenValue', (_, pipelineId?: string) => {
+    return dealsRepo.getOpenDealsValue(pipelineId)
+  })
+
+  ipcMain.handle('deals:getClosedStats', (_, pipelineId?: string, days?: number) => {
+    return dealsRepo.getClosedDealsStats(pipelineId, days)
+  })
+
+  ipcMain.handle('deals:getExpectedClose', (_, pipelineId?: string) => {
+    return dealsRepo.getExpectedCloseThisMonth(pipelineId)
+  })
+
+  ipcMain.handle('deals:getWeightedValue', (_, pipelineId?: string) => {
+    return dealsRepo.getWeightedPipelineValue(pipelineId)
+  })
+
+  // === TASKS ===
+  ipcMain.handle('tasks:getAll', () => {
+    return tasksRepo.getAllTasks()
+  })
+
+  ipcMain.handle('tasks:getById', (_, id: string) => {
+    return tasksRepo.getTaskById(id)
+  })
+
+  ipcMain.handle('tasks:getByContact', (_, contactId: string) => {
+    return tasksRepo.getTasksByContact(contactId)
+  })
+
+  ipcMain.handle('tasks:getByDeal', (_, dealId: string) => {
+    return tasksRepo.getTasksByDeal(dealId)
+  })
+
+  ipcMain.handle('tasks:getOpen', () => {
+    return tasksRepo.getOpenTasks()
+  })
+
+  ipcMain.handle('tasks:getToday', () => {
+    return tasksRepo.getTodayTasks()
+  })
+
+  ipcMain.handle('tasks:getOverdue', () => {
+    return tasksRepo.getOverdueTasks()
+  })
+
+  ipcMain.handle('tasks:getUpcoming', (_, days?: number) => {
+    return tasksRepo.getUpcomingTasks(days)
+  })
+
+  ipcMain.handle('tasks:create', (_, data: Omit<Task, 'id' | 'created_at' | 'completed_at' | 'deleted_at'>) => {
+    return tasksRepo.createTask(data)
+  })
+
+  ipcMain.handle('tasks:update', (_, id: string, data: Partial<Task>) => {
+    return tasksRepo.updateTask(id, data)
+  })
+
+  ipcMain.handle('tasks:complete', (_, id: string) => {
+    return tasksRepo.completeTask(id)
+  })
+
+  ipcMain.handle('tasks:reopen', (_, id: string) => {
+    return tasksRepo.reopenTask(id)
+  })
+
+  ipcMain.handle('tasks:cancel', (_, id: string) => {
+    return tasksRepo.cancelTask(id)
+  })
+
+  ipcMain.handle('tasks:delete', (_, id: string) => {
+    tasksRepo.deleteTask(id)
+    return { success: true }
+  })
+
+  ipcMain.handle('tasks:getCount', () => {
+    return tasksRepo.getTaskCount()
+  })
+
+  ipcMain.handle('tasks:getForAgenda', (_, date: string) => {
+    return tasksRepo.getTasksForAgenda(date)
+  })
+
+  // === CUSTOM FIELDS ===
+  ipcMain.handle('customFields:getDefinitions', (_, entityType?: 'contact' | 'deal' | 'task') => {
+    return customFieldsRepo.getAllFieldDefinitions(entityType)
+  })
+
+  ipcMain.handle('customFields:getDefinitionById', (_, id: string) => {
+    return customFieldsRepo.getFieldDefinitionById(id)
+  })
+
+  ipcMain.handle('customFields:createDefinition', (_, data: Omit<CustomFieldDefinition, 'id' | 'created_at'>) => {
+    return customFieldsRepo.createFieldDefinition(data)
+  })
+
+  ipcMain.handle('customFields:updateDefinition', (_, id: string, data: Partial<CustomFieldDefinition>) => {
+    return customFieldsRepo.updateFieldDefinition(id, data)
+  })
+
+  ipcMain.handle('customFields:deleteDefinition', (_, id: string) => {
+    customFieldsRepo.deleteFieldDefinition(id)
+    return { success: true }
+  })
+
+  ipcMain.handle('customFields:reorderDefinitions', (_, entityType: string, orderedIds: string[]) => {
+    customFieldsRepo.reorderFieldDefinitions(entityType, orderedIds)
+    return { success: true }
+  })
+
+  ipcMain.handle('customFields:getValues', (_, entityId: string) => {
+    return customFieldsRepo.getFieldValues(entityId)
+  })
+
+  ipcMain.handle('customFields:getValuesWithDefinitions', (_, entityId: string) => {
+    return customFieldsRepo.getFieldValuesWithDefinitions(entityId)
+  })
+
+  ipcMain.handle('customFields:setValue', (_, entityId: string, fieldId: string, value: string | null) => {
+    customFieldsRepo.setFieldValue(entityId, fieldId, value)
+    return { success: true }
+  })
+
+  ipcMain.handle('customFields:setValues', (_, entityId: string, values: Record<string, string | null>) => {
+    customFieldsRepo.setFieldValues(entityId, values)
+    return { success: true }
+  })
+
+  ipcMain.handle('customFields:deleteValues', (_, entityId: string) => {
+    customFieldsRepo.deleteAllFieldValues(entityId)
+    return { success: true }
+  })
+
+  // === AUTOMATIONS ===
+  ipcMain.handle('automations:getAll', () => {
+    return automationsRepo.getAllRules()
+  })
+
+  ipcMain.handle('automations:getEnabled', () => {
+    return automationsRepo.getEnabledRules()
+  })
+
+  ipcMain.handle('automations:getById', (_, id: string) => {
+    return automationsRepo.getRuleById(id)
+  })
+
+  ipcMain.handle('automations:getByTrigger', (_, triggerType: AutomationTriggerType) => {
+    return automationsRepo.getRulesByTrigger(triggerType)
+  })
+
+  ipcMain.handle('automations:create', (_, data: Omit<AutomationRule, 'id' | 'run_count' | 'last_run_at' | 'created_at'>) => {
+    return automationsRepo.createRule(data)
+  })
+
+  ipcMain.handle('automations:update', (_, id: string, data: Partial<AutomationRule>) => {
+    return automationsRepo.updateRule(id, data)
+  })
+
+  ipcMain.handle('automations:toggle', (_, id: string, enabled: boolean) => {
+    return automationsRepo.toggleRule(id, enabled)
+  })
+
+  ipcMain.handle('automations:delete', (_, id: string) => {
+    automationsRepo.deleteRule(id)
+    return { success: true }
+  })
+
+  ipcMain.handle('automations:getStats', () => {
+    return automationsRepo.getRuleStats()
+  })
+
+  // === ENRICHMENT ===
+  ipcMain.handle('enrichment:enrichContact', async (_, contactId: string) => {
+    return enrichmentService.enrichContact(contactId)
+  })
+
+  ipcMain.handle('enrichment:batchEnrich', async (_, contactIds: string[]) => {
+    const results = await enrichmentService.batchEnrichContacts(contactIds)
+    return Object.fromEntries(results)
+  })
+
+  ipcMain.handle('enrichment:getFaviconUrl', (_, domain: string) => {
+    return enrichmentService.getFaviconUrl(domain)
+  })
+
+  ipcMain.handle('enrichment:getLogoUrl', (_, domain: string) => {
+    return enrichmentService.getLogoUrl(domain)
+  })
+
+  ipcMain.handle('enrichment:extractDomain', (_, email: string) => {
+    return enrichmentService.extractDomainFromEmail(email)
+  })
+
+  ipcMain.handle('enrichment:guessCompany', (_, domain: string) => {
+    return enrichmentService.guessCompanyFromDomain(domain)
+  })
+
+  // === EMAIL TEMPLATES ===
+  ipcMain.handle('templates:getAll', () => {
+    return templatesRepo.getAllTemplates()
+  })
+
+  ipcMain.handle('templates:getById', (_, id: string) => {
+    return templatesRepo.getTemplateById(id)
+  })
+
+  ipcMain.handle('templates:create', (_, data: { name: string; subject: string; body: string; variables?: string }) => {
+    return templatesRepo.createTemplate({
+      ...data,
+      variables: data.variables || '[]'
+    })
+  })
+
+  ipcMain.handle('templates:update', (_, id: string, data: Partial<{ name: string; subject: string; body: string; variables: string }>) => {
+    return templatesRepo.updateTemplate(id, data)
+  })
+
+  ipcMain.handle('templates:delete', (_, id: string) => {
+    templatesRepo.deleteTemplate(id)
+    return { success: true }
+  })
+
+  ipcMain.handle('templates:render', (_, templateId: string, variables: Record<string, string>) => {
+    const template = templatesRepo.getTemplateById(templateId)
+    if (!template) throw new Error('Template not found')
+    templatesRepo.incrementTemplateUsage(templateId)
+    return templatesRepo.renderTemplate(template, variables)
+  })
+
+  // === SEQUENCES ===
+  ipcMain.handle('sequences:getAll', () => {
+    return templatesRepo.getAllSequences()
+  })
+
+  ipcMain.handle('sequences:getById', (_, id: string) => {
+    return templatesRepo.getSequenceById(id)
+  })
+
+  ipcMain.handle('sequences:create', (_, data: { name: string; steps: string; active?: number }) => {
+    return templatesRepo.createSequence({
+      ...data,
+      active: data.active ?? 1
+    })
+  })
+
+  ipcMain.handle('sequences:update', (_, id: string, data: Partial<{ name: string; steps: string; active: number }>) => {
+    return templatesRepo.updateSequence(id, data)
+  })
+
+  ipcMain.handle('sequences:delete', (_, id: string) => {
+    templatesRepo.deleteSequence(id)
+    return { success: true }
+  })
+
+  ipcMain.handle('sequences:enroll', (_, sequenceId: string, contactId: string) => {
+    return templatesRepo.enrollContact(sequenceId, contactId)
+  })
+
+  ipcMain.handle('sequences:getEnrollments', (_, sequenceId: string) => {
+    return templatesRepo.getEnrollmentsBySequence(sequenceId)
+  })
+
+  ipcMain.handle('sequences:pauseEnrollment', (_, enrollmentId: string) => {
+    return templatesRepo.pauseEnrollment(enrollmentId)
+  })
+
+  ipcMain.handle('sequences:cancelEnrollment', (_, enrollmentId: string) => {
+    return templatesRepo.cancelEnrollment(enrollmentId)
+  })
+
+  // === EMAIL SYNC ===
+  ipcMain.handle('emailSync:isGmailAvailable', () => {
+    return gmailSync.isGmailSyncAvailable()
+  })
+
+  ipcMain.handle('emailSync:isOutlookAvailable', () => {
+    return outlookSync.isOutlookSyncAvailable()
+  })
+
+  ipcMain.handle('emailSync:connectGmail', async () => {
+    return gmailSync.startGmailAuth()
+  })
+
+  ipcMain.handle('emailSync:connectOutlook', async () => {
+    return outlookSync.startOutlookAuth()
+  })
+
+  ipcMain.handle('emailSync:syncGmailEmails', async (_, accountId: string) => {
+    return gmailSync.syncEmails(accountId)
+  })
+
+  ipcMain.handle('emailSync:syncGmailCalendar', async (_, accountId: string) => {
+    return gmailSync.syncCalendar(accountId)
+  })
+
+  ipcMain.handle('emailSync:syncOutlookEmails', async (_, accountId: string) => {
+    return outlookSync.syncEmails(accountId)
+  })
+
+  ipcMain.handle('emailSync:syncOutlookCalendar', async (_, accountId: string) => {
+    return outlookSync.syncCalendar(accountId)
+  })
+
+  ipcMain.handle('emailSync:disconnectGmail', async (_, accountId: string) => {
+    await gmailSync.disconnectGmailAccount(accountId)
+    return { success: true }
+  })
+
+  ipcMain.handle('emailSync:disconnectOutlook', async (_, accountId: string) => {
+    await outlookSync.disconnectOutlookAccount(accountId)
+    return { success: true }
+  })
+
+  ipcMain.handle('emailSync:getContactEmails', (_, contactId: string, provider: 'gmail' | 'outlook') => {
+    return provider === 'gmail' 
+      ? gmailSync.getContactEmails(contactId)
+      : outlookSync.getContactEmails(contactId)
+  })
+
+  ipcMain.handle('emailSync:getContactEvents', (_, contactId: string, provider: 'gmail' | 'outlook') => {
+    return provider === 'gmail'
+      ? gmailSync.getContactEvents(contactId)
+      : outlookSync.getContactEvents(contactId)
+  })
+
+  // === AI ASSISTANT ===
+  ipcMain.handle('ai:getConfig', () => {
+    return aiService.getAIConfig()
+  })
+
+  ipcMain.handle('ai:setConfig', (_, config: Partial<{ provider: string; localEndpoint: string; openaiApiKey: string; anthropicApiKey: string; model: string }>) => {
+    aiService.setAIConfig(config as Parameters<typeof aiService.setAIConfig>[0])
+    return { success: true }
+  })
+
+  ipcMain.handle('ai:checkLocalAvailable', async () => {
+    return aiService.checkLocalAIAvailable()
+  })
+
+  ipcMain.handle('ai:getLocalModels', async () => {
+    return aiService.getLocalModels()
+  })
+
+  ipcMain.handle('ai:summarizeNotes', async (_, notes: string[]) => {
+    return aiService.summarizeNotes(notes)
+  })
+
+  ipcMain.handle('ai:suggestFollowUp', async (_, context: { contactName: string; recentInteractions: string[]; lastContactDate?: string }) => {
+    return aiService.suggestNextFollowUp(context)
+  })
+
+  ipcMain.handle('ai:suggestTags', async (_, notes: string, existingTags: string[]) => {
+    return aiService.suggestTags(notes, existingTags)
+  })
+
+  ipcMain.handle('ai:draftEmail', async (_, context: { contactName: string; purpose: string; previousEmails?: string[]; tone?: 'formal' | 'friendly' | 'casual' }) => {
+    return aiService.draftEmail(context)
+  })
+
+  ipcMain.handle('ai:meetingPrep', async (_, context: { contactName: string; company?: string; meetingPurpose?: string; recentNotes?: string[] }) => {
+    return aiService.generateMeetingPrep(context)
   })
 }
 

@@ -8,7 +8,11 @@ import {
   Settings,
   Shield,
   ChevronLeft,
-  Sparkles
+  Sparkles,
+  Kanban,
+  CheckSquare,
+  Zap,
+  BarChart3
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -33,7 +37,11 @@ export function Sidebar() {
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
     { path: '/contacts', icon: Users, label: t('nav.contacts') },
+    { path: '/pipeline', icon: Kanban, label: t('nav.pipeline') },
+    { path: '/tasks', icon: CheckSquare, label: t('nav.tasks') },
     { path: '/followups', icon: CalendarClock, label: t('nav.followups') },
+    { path: '/automations', icon: Zap, label: t('nav.automations') },
+    { path: '/reports', icon: BarChart3, label: t('nav.reports') },
     { path: '/smart-lists', icon: Sparkles, label: t('nav.smartLists') },
     { path: '/import', icon: Upload, label: t('nav.import') },
     { path: '/settings', icon: Settings, label: t('nav.settings') }
