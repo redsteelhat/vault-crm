@@ -51,7 +51,37 @@ const api = {
     getStale: (days: number): Promise<Contact[]> =>
       ipcRenderer.invoke('contacts:getStale', days),
     getHotList: (): Promise<Contact[]> => ipcRenderer.invoke('contacts:getHotList'),
-    getCount: (): Promise<number> => ipcRenderer.invoke('contacts:getCount')
+    getCount: (): Promise<number> => ipcRenderer.invoke('contacts:getCount'),
+    getSourceDistribution: (): Promise<{ source: string; count: number }[]> =>
+      ipcRenderer.invoke('contacts:getSourceDistribution'),
+    getCreatedThisMonth: (): Promise<number> =>
+      ipcRenderer.invoke('contacts:getCreatedThisMonth'),
+    getUniqueCompanies: (): Promise<string[]> =>
+      ipcRenderer.invoke('contacts:getUniqueCompanies'),
+    getUniqueSources: (): Promise<string[]> =>
+      ipcRenderer.invoke('contacts:getUniqueSources'),
+    getUniqueLocations: (): Promise<string[]> =>
+      ipcRenderer.invoke('contacts:getUniqueLocations'),
+    getWithFilters: (filters: {
+      search?: string
+      tags?: string[]
+      companies?: string[]
+      sources?: string[]
+      locations?: string[]
+      createdFrom?: string
+      createdTo?: string
+      lastContactFrom?: string
+      lastContactTo?: string
+      sortBy?: 'name' | 'company' | 'created_at' | 'last_contact_at' | 'updated_at'
+      sortOrder?: 'asc' | 'desc'
+    }): Promise<Contact[]> =>
+      ipcRenderer.invoke('contacts:getWithFilters', filters),
+    bulkDelete: (ids: string[]): Promise<{ count: number }> =>
+      ipcRenderer.invoke('contacts:bulkDelete', ids),
+    bulkAddTag: (contactIds: string[], tagId: string): Promise<{ count: number }> =>
+      ipcRenderer.invoke('contacts:bulkAddTag', contactIds, tagId),
+    bulkRemoveTag: (contactIds: string[], tagId: string): Promise<{ count: number }> =>
+      ipcRenderer.invoke('contacts:bulkRemoveTag', contactIds, tagId)
   },
 
   // Interactions
@@ -65,7 +95,18 @@ const api = {
     delete: (id: string): Promise<void> => ipcRenderer.invoke('interactions:delete', id),
     getRecent: (limit: number): Promise<Interaction[]> =>
       ipcRenderer.invoke('interactions:getRecent', limit),
-    getCount: (): Promise<number> => ipcRenderer.invoke('interactions:getCount')
+    getCount: (): Promise<number> => ipcRenderer.invoke('interactions:getCount'),
+    getDailyCounts: (days: number): Promise<{ date: string; count: number }[]> =>
+      ipcRenderer.invoke('interactions:getDailyCounts', days),
+    getTypeStats: (): Promise<{ type: string; count: number }[]> =>
+      ipcRenderer.invoke('interactions:getTypeStats'),
+    getMonthlyCounts: (months: number): Promise<{ month: string; count: number }[]> =>
+      ipcRenderer.invoke('interactions:getMonthlyCounts', months),
+    getContactStats: (contactId: string): Promise<{
+      monthlyData: { month: string; count: number }[]
+      typeData: { type: string; count: number }[]
+      total: number
+    }> => ipcRenderer.invoke('interactions:getContactStats', contactId)
   },
 
   // Tags

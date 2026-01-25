@@ -38,7 +38,65 @@
     "weeksAgo": "{{count}} hafta önce",
     "weeksAgo_plural": "{{count}} hafta önce",
     "monthsAgo": "{{count}} ay önce",
-    "monthsAgo_plural": "{{count}} ay önce"
+    "monthsAgo_plural": "{{count}} ay önce",
+    "noData": "Veri yok",
+    "trend": "Trend",
+    "types": "Türler"
+  },
+  "filters": {
+    "filters": "Filtreler",
+    "clearAll": "Tümünü Temizle",
+    "apply": "Uygula",
+    "tags": "Etiketler",
+    "company": "Şirket",
+    "source": "Kaynak",
+    "location": "Konum",
+    "dateRange": "Tarih Aralığı",
+    "createdFrom": "Oluşturulma Başlangıcı",
+    "createdTo": "Oluşturulma Bitişi",
+    "lastContactFrom": "Son İletişim Başlangıcı",
+    "lastContactTo": "Son İletişim Bitişi",
+    "selectTags": "Etiket seçin...",
+    "selectCompanies": "Şirket seçin...",
+    "selectSources": "Kaynak seçin...",
+    "selectLocations": "Konum seçin...",
+    "activeFilters": "{{count}} aktif filtre",
+    "activeFilters_plural": "{{count}} aktif filtre"
+  },
+  "sort": {
+    "sortBy": "Sırala",
+    "name": "Ad",
+    "nameAsc": "Ad (A-Z)",
+    "nameDesc": "Ad (Z-A)",
+    "company": "Şirket",
+    "createdAt": "Oluşturulma Tarihi",
+    "lastContact": "Son İletişim",
+    "updatedAt": "Son Güncelleme",
+    "asc": "Artan",
+    "desc": "Azalan"
+  },
+  "bulk": {
+    "selected": "{{count}} seçili",
+    "selectAll": "Tümünü Seç",
+    "deselectAll": "Seçimi Kaldır",
+    "deleteSelected": "Seçilenleri Sil",
+    "addTagToSelected": "Etiket Ekle",
+    "removeTagFromSelected": "Etiket Kaldır",
+    "exportSelected": "Seçilenleri Dışa Aktar",
+    "confirmDelete": "{{count}} kişi silinsin mi?",
+    "confirmDelete_plural": "{{count}} kişi silinsin mi?",
+    "deleteSuccess": "{{count}} kişi silindi",
+    "deleteSuccess_plural": "{{count}} kişi silindi",
+    "tagAdded": "{{count}} kişiye etiket eklendi",
+    "tagAdded_plural": "{{count}} kişiye etiket eklendi",
+    "tagRemoved": "{{count}} kişiden etiket kaldırıldı",
+    "tagRemoved_plural": "{{count}} kişiden etiket kaldırıldı"
+  },
+  "views": {
+    "grid": "Izgara Görünümü",
+    "table": "Tablo Görünümü",
+    "calendar": "Takvim Görünümü",
+    "list": "Liste Görünümü"
   },
   "nav": {
     "dashboard": "Panel",
@@ -63,7 +121,17 @@
     "noRecentContacts": "Henüz kişi yok",
     "noRecentContactsDesc": "Kişileri içe aktarın veya manuel ekleyin",
     "viewAll": "Tümünü gör",
-    "markDone": "Tamamlandı işaretle"
+    "markDone": "Tamamlandı işaretle",
+    "activityChart": "Haftalık Aktivite",
+    "recentInteractions": "Son Etkileşimler",
+    "noInteractions": "Son etkileşim yok",
+    "interactions": "etkileşim",
+    "sourceDistribution": "Kaynak Dağılımı",
+    "tagDistribution": "Etiket Dağılımı",
+    "thisMonth": "Bu Ay",
+    "newContactsThisMonth": "Bu Ay Yeni Kişiler",
+    "totalInteractions": "Toplam Etkileşim",
+    "unknown": "Bilinmiyor"
   },
   "contacts": {
     "title": "Kişiler",
@@ -108,6 +176,12 @@
       "other": "Diğer"
     }
   },
+  "interactions": {
+    "note": "Not",
+    "call": "Arama",
+    "meeting": "Toplantı",
+    "email": "E-posta"
+  },
   "contactDetail": {
     "interactions": "Etkileşimler",
     "followups": "Takipler",
@@ -125,7 +199,10 @@
       "call": "Arama",
       "meeting": "Toplantı",
       "email": "E-posta"
-    }
+    },
+    "interactionAnalytics": "Etkileşim Analitiği",
+    "totalInteractions": "Toplam Etkileşim",
+    "last6Months": "Son 6 Ay"
   },
   "followups": {
     "title": "Takipler",

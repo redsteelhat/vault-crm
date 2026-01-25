@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   Mail,
@@ -14,7 +15,8 @@ import {
   PhoneCall,
   Users,
   Clock,
-  Tag as TagIcon
+  Tag as TagIcon,
+  TrendingUp
 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
@@ -47,6 +49,7 @@ import { useFollowUpStore } from '@/stores/followupStore'
 import { useToast } from '@/hooks/useToast'
 import { formatDate, formatDateTime, parseEmails, parsePhones, getInitials, cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { InteractionAnalyticsChart } from '@/components/charts/InteractionAnalyticsChart'
 
 interface Interaction {
   id: string
@@ -64,7 +67,14 @@ const interactionIcons = {
   email: Mail
 }
 
+interface InteractionStats {
+  monthlyData: { month: string; count: number }[]
+  typeData: { type: string; count: number }[]
+  total: number
+}
+
 export function ContactDetail() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -85,6 +95,7 @@ export function ContactDetail() {
 
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [followups, setFollowups] = useState<any[]>([])
+  const [interactionStats, setInteractionStats] = useState<InteractionStats | null>(null)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isAddNoteOpen, setIsAddNoteOpen] = useState(false)
   const [isAddFollowUpOpen, setIsAddFollowUpOpen] = useState(false)
@@ -107,6 +118,7 @@ export function ContactDetail() {
       fetchTags()
       loadInteractions()
       loadFollowups()
+      loadInteractionStats()
     }
   }, [id, selectContact, fetchTags])
 
@@ -137,6 +149,16 @@ export function ContactDetail() {
     if (!id) return
     const result = await fetchByContact(id)
     setFollowups(result)
+  }
+
+  const loadInteractionStats = async () => {
+    if (!id) return
+    try {
+      const stats = await window.api.interactions.getContactStats(id)
+      setInteractionStats(stats)
+    } catch (error) {
+      console.error('Failed to load interaction stats:', error)
+    }
   }
 
   const handleUpdate = async () => {
@@ -454,10 +476,23 @@ export function ContactDetail() {
             </div>
           </div>
 
+          {/* Interaction Analytics */}
+          {interactionStats && (
+            <div className="mt-6">
+              <InteractionAnalyticsChart
+                monthlyData={interactionStats.monthlyData}
+                typeData={interactionStats.typeData.map((d) => ({
+                  type: d.type as 'note' | 'call' | 'meeting' | 'email',
+                  count: d.count
+                }))}
+              />
+            </div>
+          )}
+
           {/* Timeline */}
           <Card className="mt-6 border-none shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg">Timeline</CardTitle>
+              <CardTitle className="text-lg">{t('contactDetail.interactions')}</CardTitle>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="all">

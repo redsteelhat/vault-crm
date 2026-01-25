@@ -38,7 +38,65 @@
     "weeksAgo": "{{count}} week ago",
     "weeksAgo_plural": "{{count}} weeks ago",
     "monthsAgo": "{{count}} month ago",
-    "monthsAgo_plural": "{{count}} months ago"
+    "monthsAgo_plural": "{{count}} months ago",
+    "noData": "No data",
+    "trend": "Trend",
+    "types": "Types"
+  },
+  "filters": {
+    "filters": "Filters",
+    "clearAll": "Clear All",
+    "apply": "Apply",
+    "tags": "Tags",
+    "company": "Company",
+    "source": "Source",
+    "location": "Location",
+    "dateRange": "Date Range",
+    "createdFrom": "Created From",
+    "createdTo": "Created To",
+    "lastContactFrom": "Last Contact From",
+    "lastContactTo": "Last Contact To",
+    "selectTags": "Select tags...",
+    "selectCompanies": "Select companies...",
+    "selectSources": "Select sources...",
+    "selectLocations": "Select locations...",
+    "activeFilters": "{{count}} active filter",
+    "activeFilters_plural": "{{count}} active filters"
+  },
+  "sort": {
+    "sortBy": "Sort By",
+    "name": "Name",
+    "nameAsc": "Name (A-Z)",
+    "nameDesc": "Name (Z-A)",
+    "company": "Company",
+    "createdAt": "Created Date",
+    "lastContact": "Last Contact",
+    "updatedAt": "Recently Updated",
+    "asc": "Ascending",
+    "desc": "Descending"
+  },
+  "bulk": {
+    "selected": "{{count}} selected",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "deleteSelected": "Delete Selected",
+    "addTagToSelected": "Add Tag",
+    "removeTagFromSelected": "Remove Tag",
+    "exportSelected": "Export Selected",
+    "confirmDelete": "Delete {{count}} contact?",
+    "confirmDelete_plural": "Delete {{count}} contacts?",
+    "deleteSuccess": "{{count}} contact deleted",
+    "deleteSuccess_plural": "{{count}} contacts deleted",
+    "tagAdded": "Tag added to {{count}} contact",
+    "tagAdded_plural": "Tag added to {{count}} contacts",
+    "tagRemoved": "Tag removed from {{count}} contact",
+    "tagRemoved_plural": "Tag removed from {{count}} contacts"
+  },
+  "views": {
+    "grid": "Grid View",
+    "table": "Table View",
+    "calendar": "Calendar View",
+    "list": "List View"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -63,7 +121,17 @@
     "noRecentContacts": "No contacts yet",
     "noRecentContactsDesc": "Import contacts or add them manually",
     "viewAll": "View all",
-    "markDone": "Mark as done"
+    "markDone": "Mark as done",
+    "activityChart": "Weekly Activity",
+    "recentInteractions": "Recent Interactions",
+    "noInteractions": "No recent interactions",
+    "interactions": "interactions",
+    "sourceDistribution": "Source Distribution",
+    "tagDistribution": "Tag Distribution",
+    "thisMonth": "This Month",
+    "newContactsThisMonth": "New Contacts This Month",
+    "totalInteractions": "Total Interactions",
+    "unknown": "Unknown"
   },
   "contacts": {
     "title": "Contacts",
@@ -125,7 +193,16 @@
       "call": "Call",
       "meeting": "Meeting",
       "email": "Email"
-    }
+    },
+    "interactionAnalytics": "Interaction Analytics",
+    "totalInteractions": "Total Interactions",
+    "last6Months": "Last 6 Months"
+  },
+  "interactions": {
+    "note": "Note",
+    "call": "Call",
+    "meeting": "Meeting",
+    "email": "Email"
   },
   "followups": {
     "title": "Follow-ups",

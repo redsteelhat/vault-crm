@@ -7,7 +7,9 @@ import {
   Clock,
   CheckCircle2,
   MoreVertical,
-  Calendar
+  Calendar,
+  List,
+  CalendarDays
 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,6 +36,9 @@ import { useFollowUpStore } from '@/stores/followupStore'
 import { useToast } from '@/hooks/useToast'
 import { formatDate, getDueDateLabel, cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { CalendarView } from '@/components/CalendarView'
+
+type ViewMode = 'list' | 'calendar'
 
 export function FollowUps() {
   const { t } = useTranslation()
@@ -53,12 +58,19 @@ export function FollowUps() {
   const [snoozeDialogOpen, setSnoozeDialogOpen] = useState(false)
   const [selectedFollowUp, setSelectedFollowUp] = useState<string | null>(null)
   const [snoozeDate, setSnoozeDate] = useState<Date>(new Date())
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    return (localStorage.getItem('followupsViewMode') as ViewMode) || 'list'
+  })
 
   useEffect(() => {
     fetchDueToday()
     fetchOverdue()
     fetchUpcoming(30)
   }, [fetchDueToday, fetchOverdue, fetchUpcoming])
+
+  useEffect(() => {
+    localStorage.setItem('followupsViewMode', viewMode)
+  }, [viewMode])
 
   const handleMarkDone = async (id: string) => {
     try {
@@ -97,6 +109,8 @@ export function FollowUps() {
     setSnoozeDate(new Date(Date.now() + 24 * 60 * 60 * 1000)) // Tomorrow
     setSnoozeDialogOpen(true)
   }
+
+  const allFollowups = [...overdue, ...dueToday, ...upcoming]
 
   const FollowUpItem = ({ followup }: { followup: any }) => {
     const { label, variant } = getDueDateLabel(followup.due_at)
@@ -212,110 +226,141 @@ export function FollowUps() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{upcoming.length}</p>
-                  <p className="text-sm text-muted-foreground">{t('followups.upcoming')} (30 {t('settings.minutes').replace('dakika', 'gün').replace('minutes', 'days')})</p>
+                  <p className="text-sm text-muted-foreground">{t('followups.upcoming')} (30 {t('common.daysAgo', { count: 0 }).replace('0 day ago', 'days')})</p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Tabs */}
-          <Tabs defaultValue="all" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="all">
-                {t('common.all')} ({overdue.length + dueToday.length + upcoming.length})
-              </TabsTrigger>
-              <TabsTrigger value="overdue" className="text-red-500">
-                {t('followups.overdue')} ({overdue.length})
-              </TabsTrigger>
-              <TabsTrigger value="today" className="text-amber-500">
-                {t('common.today')} ({dueToday.length})
-              </TabsTrigger>
-              <TabsTrigger value="upcoming">{t('followups.upcoming')} ({upcoming.length})</TabsTrigger>
-            </TabsList>
+          {/* View Toggle */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">
+              {viewMode === 'list' ? t('views.list') : t('views.calendar')}
+            </h2>
+            <div className="flex items-center border rounded-lg">
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="rounded-r-none"
+                onClick={() => setViewMode('list')}
+              >
+                <List className="h-4 w-4 mr-2" />
+                {t('views.list')}
+              </Button>
+              <Button
+                variant={viewMode === 'calendar' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="rounded-l-none"
+                onClick={() => setViewMode('calendar')}
+              >
+                <CalendarDays className="h-4 w-4 mr-2" />
+                {t('views.calendar')}
+              </Button>
+            </div>
+          </div>
 
-            <TabsContent value="all">
-              <div className="space-y-3">
-                {overdue.length === 0 && dueToday.length === 0 && upcoming.length === 0 ? (
-                  <EmptyState message={t('followups.noFollowups')} />
+          {viewMode === 'calendar' ? (
+            <CalendarView followups={allFollowups} onMarkDone={handleMarkDone} />
+          ) : (
+            /* List View with Tabs */
+            <Tabs defaultValue="all" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="all">
+                  {t('common.all')} ({overdue.length + dueToday.length + upcoming.length})
+                </TabsTrigger>
+                <TabsTrigger value="overdue" className="text-red-500">
+                  {t('followups.overdue')} ({overdue.length})
+                </TabsTrigger>
+                <TabsTrigger value="today" className="text-amber-500">
+                  {t('common.today')} ({dueToday.length})
+                </TabsTrigger>
+                <TabsTrigger value="upcoming">{t('followups.upcoming')} ({upcoming.length})</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="all">
+                <div className="space-y-3">
+                  {overdue.length === 0 && dueToday.length === 0 && upcoming.length === 0 ? (
+                    <EmptyState message={t('followups.noFollowups')} />
+                  ) : (
+                    <>
+                      {overdue.length > 0 && (
+                        <div className="mb-6">
+                          <h3 className="text-sm font-medium text-red-500 mb-3 flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4" /> {t('followups.overdue')}
+                          </h3>
+                          <div className="space-y-2">
+                            {overdue.map((f) => (
+                              <FollowUpItem key={f.id} followup={f} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {dueToday.length > 0 && (
+                        <div className="mb-6">
+                          <h3 className="text-sm font-medium text-amber-500 mb-3 flex items-center gap-2">
+                            <CalendarClock className="h-4 w-4" /> {t('followups.dueToday')}
+                          </h3>
+                          <div className="space-y-2">
+                            {dueToday.map((f) => (
+                              <FollowUpItem key={f.id} followup={f} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {upcoming.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                            <Clock className="h-4 w-4" /> {t('followups.upcoming')}
+                          </h3>
+                          <div className="space-y-2">
+                            {upcoming.map((f) => (
+                              <FollowUpItem key={f.id} followup={f} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="overdue">
+                {overdue.length === 0 ? (
+                  <EmptyState message={t('followups.noFollowupsDesc')} />
                 ) : (
-                  <>
-                    {overdue.length > 0 && (
-                      <div className="mb-6">
-                        <h3 className="text-sm font-medium text-red-500 mb-3 flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4" /> {t('followups.overdue')}
-                        </h3>
-                        <div className="space-y-2">
-                          {overdue.map((f) => (
-                            <FollowUpItem key={f.id} followup={f} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {dueToday.length > 0 && (
-                      <div className="mb-6">
-                        <h3 className="text-sm font-medium text-amber-500 mb-3 flex items-center gap-2">
-                          <CalendarClock className="h-4 w-4" /> {t('followups.dueToday')}
-                        </h3>
-                        <div className="space-y-2">
-                          {dueToday.map((f) => (
-                            <FollowUpItem key={f.id} followup={f} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {upcoming.length > 0 && (
-                      <div>
-                        <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                          <Clock className="h-4 w-4" /> {t('followups.upcoming')}
-                        </h3>
-                        <div className="space-y-2">
-                          {upcoming.map((f) => (
-                            <FollowUpItem key={f.id} followup={f} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  <div className="space-y-2">
+                    {overdue.map((f) => (
+                      <FollowUpItem key={f.id} followup={f} />
+                    ))}
+                  </div>
                 )}
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="overdue">
-              {overdue.length === 0 ? (
-                <EmptyState message={t('followups.noFollowupsDesc')} />
-              ) : (
-                <div className="space-y-2">
-                  {overdue.map((f) => (
-                    <FollowUpItem key={f.id} followup={f} />
-                  ))}
-                </div>
-              )}
-            </TabsContent>
+              <TabsContent value="today">
+                {dueToday.length === 0 ? (
+                  <EmptyState message={t('followups.noFollowupsDesc')} />
+                ) : (
+                  <div className="space-y-2">
+                    {dueToday.map((f) => (
+                      <FollowUpItem key={f.id} followup={f} />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
 
-            <TabsContent value="today">
-              {dueToday.length === 0 ? (
-                <EmptyState message={t('followups.noFollowupsDesc')} />
-              ) : (
-                <div className="space-y-2">
-                  {dueToday.map((f) => (
-                    <FollowUpItem key={f.id} followup={f} />
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="upcoming">
-              {upcoming.length === 0 ? (
-                <EmptyState message={t('followups.noFollowupsDesc')} />
-              ) : (
-                <div className="space-y-2">
-                  {upcoming.map((f) => (
-                    <FollowUpItem key={f.id} followup={f} />
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+              <TabsContent value="upcoming">
+                {upcoming.length === 0 ? (
+                  <EmptyState message={t('followups.noFollowupsDesc')} />
+                ) : (
+                  <div className="space-y-2">
+                    {upcoming.map((f) => (
+                      <FollowUpItem key={f.id} followup={f} />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          )}
         </div>
       </ScrollArea>
 

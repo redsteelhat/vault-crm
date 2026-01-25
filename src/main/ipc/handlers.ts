@@ -87,6 +87,42 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
     return contactsRepo.getContactCount()
   })
 
+  ipcMain.handle('contacts:getSourceDistribution', () => {
+    return contactsRepo.getSourceDistribution()
+  })
+
+  ipcMain.handle('contacts:getCreatedThisMonth', () => {
+    return contactsRepo.getContactsCreatedThisMonth()
+  })
+
+  ipcMain.handle('contacts:getUniqueCompanies', () => {
+    return contactsRepo.getUniqueCompanies()
+  })
+
+  ipcMain.handle('contacts:getUniqueSources', () => {
+    return contactsRepo.getUniqueSources()
+  })
+
+  ipcMain.handle('contacts:getUniqueLocations', () => {
+    return contactsRepo.getUniqueLocations()
+  })
+
+  ipcMain.handle('contacts:getWithFilters', (_, filters) => {
+    return contactsRepo.getContactsWithFilters(filters)
+  })
+
+  ipcMain.handle('contacts:bulkDelete', (_, ids: string[]) => {
+    return { count: contactsRepo.bulkDeleteContacts(ids) }
+  })
+
+  ipcMain.handle('contacts:bulkAddTag', (_, contactIds: string[], tagId: string) => {
+    return { count: contactsRepo.bulkAddTagToContacts(contactIds, tagId) }
+  })
+
+  ipcMain.handle('contacts:bulkRemoveTag', (_, contactIds: string[], tagId: string) => {
+    return { count: contactsRepo.bulkRemoveTagFromContacts(contactIds, tagId) }
+  })
+
   // === INTERACTIONS ===
   ipcMain.handle(IPC_CHANNELS.INTERACTIONS_GET_BY_CONTACT, (_, contactId: string) => {
     return interactionsRepo.getInteractionsByContact(contactId)
@@ -110,6 +146,22 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
 
   ipcMain.handle('interactions:getCount', () => {
     return interactionsRepo.getInteractionCount()
+  })
+
+  ipcMain.handle('interactions:getDailyCounts', (_, days: number) => {
+    return interactionsRepo.getDailyInteractionCounts(days)
+  })
+
+  ipcMain.handle('interactions:getTypeStats', () => {
+    return interactionsRepo.getInteractionTypeStats()
+  })
+
+  ipcMain.handle('interactions:getMonthlyCounts', (_, months: number) => {
+    return interactionsRepo.getMonthlyInteractionCounts(months)
+  })
+
+  ipcMain.handle('interactions:getContactStats', (_, contactId: string) => {
+    return interactionsRepo.getContactInteractionStats(contactId)
   })
 
   // === TAGS ===

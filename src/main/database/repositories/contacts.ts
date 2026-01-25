@@ -247,3 +247,185 @@ export function cleanupDeletedContacts(): number {
   `)
   return result.changes
 }
+
+// Get source distribution
+export function getSourceDistribution(): { source: string; count: number }[] {
+  return query<{ source: string; count: number }>(`
+    SELECT COALESCE(source, 'Unknown') as source, COUNT(*) as count
+    FROM contacts
+    WHERE deleted_at IS NULL
+    GROUP BY source
+    ORDER BY count DESC
+  `)
+}
+
+// Get contacts created this month
+export function getContactsCreatedThisMonth(): number {
+  const result = queryOne<{ count: number }>(`
+    SELECT COUNT(*) as count FROM contacts 
+    WHERE deleted_at IS NULL 
+    AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+  `)
+  return result?.count || 0
+}
+
+// Get unique companies
+export function getUniqueCompanies(): string[] {
+  const results = query<{ company: string }>(`
+    SELECT DISTINCT company FROM contacts 
+    WHERE deleted_at IS NULL AND company IS NOT NULL AND company != ''
+    ORDER BY company ASC
+  `)
+  return results.map(r => r.company)
+}
+
+// Get unique sources
+export function getUniqueSources(): string[] {
+  const results = query<{ source: string }>(`
+    SELECT DISTINCT source FROM contacts 
+    WHERE deleted_at IS NULL AND source IS NOT NULL AND source != ''
+    ORDER BY source ASC
+  `)
+  return results.map(r => r.source)
+}
+
+// Get unique locations
+export function getUniqueLocations(): string[] {
+  const results = query<{ location: string }>(`
+    SELECT DISTINCT location FROM contacts 
+    WHERE deleted_at IS NULL AND location IS NOT NULL AND location != ''
+    ORDER BY location ASC
+  `)
+  return results.map(r => r.location)
+}
+
+// Filter parameters interface
+interface ContactFilters {
+  search?: string
+  tags?: string[]
+  companies?: string[]
+  sources?: string[]
+  locations?: string[]
+  createdFrom?: string
+  createdTo?: string
+  lastContactFrom?: string
+  lastContactTo?: string
+  sortBy?: 'name' | 'company' | 'created_at' | 'last_contact_at' | 'updated_at'
+  sortOrder?: 'asc' | 'desc'
+}
+
+// Get contacts with advanced filters
+export function getContactsWithFilters(filters: ContactFilters): Contact[] {
+  const conditions: string[] = ['c.deleted_at IS NULL']
+  const params: unknown[] = []
+
+  if (filters.search) {
+    const pattern = `%${filters.search.toLowerCase()}%`
+    conditions.push('(lower(c.name) LIKE ? OR lower(c.company) LIKE ? OR lower(c.title) LIKE ? OR lower(c.emails) LIKE ?)')
+    params.push(pattern, pattern, pattern, pattern)
+  }
+
+  if (filters.companies && filters.companies.length > 0) {
+    const placeholders = filters.companies.map(() => '?').join(', ')
+    conditions.push(`c.company IN (${placeholders})`)
+    params.push(...filters.companies)
+  }
+
+  if (filters.sources && filters.sources.length > 0) {
+    const placeholders = filters.sources.map(() => '?').join(', ')
+    conditions.push(`c.source IN (${placeholders})`)
+    params.push(...filters.sources)
+  }
+
+  if (filters.locations && filters.locations.length > 0) {
+    const placeholders = filters.locations.map(() => '?').join(', ')
+    conditions.push(`c.location IN (${placeholders})`)
+    params.push(...filters.locations)
+  }
+
+  if (filters.createdFrom) {
+    conditions.push('date(c.created_at) >= date(?)')
+    params.push(filters.createdFrom)
+  }
+
+  if (filters.createdTo) {
+    conditions.push('date(c.created_at) <= date(?)')
+    params.push(filters.createdTo)
+  }
+
+  if (filters.lastContactFrom) {
+    conditions.push('date(c.last_contact_at) >= date(?)')
+    params.push(filters.lastContactFrom)
+  }
+
+  if (filters.lastContactTo) {
+    conditions.push('date(c.last_contact_at) <= date(?)')
+    params.push(filters.lastContactTo)
+  }
+
+  let sql = `SELECT DISTINCT c.* FROM contacts c`
+
+  if (filters.tags && filters.tags.length > 0) {
+    sql += ` JOIN contact_tags ct ON c.id = ct.contact_id`
+    const placeholders = filters.tags.map(() => '?').join(', ')
+    conditions.push(`ct.tag_id IN (${placeholders})`)
+    params.push(...filters.tags)
+  }
+
+  sql += ` WHERE ${conditions.join(' AND ')}`
+
+  const sortColumn = filters.sortBy || 'updated_at'
+  const sortOrder = filters.sortOrder || 'desc'
+  sql += ` ORDER BY c.${sortColumn} ${sortOrder.toUpperCase()}`
+
+  return query<Contact>(sql, params)
+}
+
+// Bulk delete contacts
+export function bulkDeleteContacts(ids: string[]): number {
+  if (ids.length === 0) return 0
+  
+  const now = new Date().toISOString()
+  let count = 0
+  
+  transaction(() => {
+    for (const id of ids) {
+      run('UPDATE contacts SET deleted_at = ? WHERE id = ?', [now, id])
+      count++
+    }
+  })
+  
+  return count
+}
+
+// Bulk add tag to contacts
+export function bulkAddTagToContacts(contactIds: string[], tagId: string): number {
+  if (contactIds.length === 0) return 0
+  
+  let count = 0
+  
+  transaction(() => {
+    for (const contactId of contactIds) {
+      run('INSERT OR IGNORE INTO contact_tags (contact_id, tag_id) VALUES (?, ?)', [contactId, tagId])
+      count++
+    }
+  })
+  
+  return count
+}
+
+// Bulk remove tag from contacts
+export function bulkRemoveTagFromContacts(contactIds: string[], tagId: string): number {
+  if (contactIds.length === 0) return 0
+  
+  let count = 0
+  
+  transaction(() => {
+    for (const contactId of contactIds) {
+      run('DELETE FROM contact_tags WHERE contact_id = ? AND tag_id = ?', [contactId, tagId])
+      count++
+    }
+  })
+  
+  return count
+}
