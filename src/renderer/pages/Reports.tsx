@@ -22,10 +22,7 @@ import {
   Cell,
   LineChart,
   Line,
-  Legend,
-  FunnelChart,
-  Funnel,
-  LabelList
+  Legend
 } from 'recharts'
 import { 
   TrendingUp, 
@@ -43,6 +40,7 @@ interface Pipeline {
   id: string
   name: string
   stages: string
+  is_default: number
 }
 
 interface PipelineStage {
@@ -101,7 +99,7 @@ export default function Reports() {
       setPipelines(pipelinesData)
 
       if (pipelinesData.length > 0) {
-        const defaultPipeline = pipelinesData.find(p => p.is_default) || pipelinesData[0]
+        const defaultPipeline = pipelinesData.find(p => p.is_default === 1) || pipelinesData[0]
         setSelectedPipeline(defaultPipeline.id)
       }
 
@@ -121,8 +119,8 @@ export default function Reports() {
       const taskCount = await api.tasks.getCount()
       setTaskStats(taskCount)
 
-      // Load activity data (last 30 days)
-      const interactionData = await api.interactions.getMonthlyInteractionCounts()
+      // Load activity data (last 12 months)
+      const interactionData = await api.interactions.getMonthlyCounts(12)
       setActivityData(interactionData.map(d => ({
         date: d.month,
         count: d.count
@@ -314,28 +312,19 @@ export default function Reports() {
               <CardContent>
                 {funnelData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
-                    <FunnelChart>
+                    <BarChart data={funnelData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" tickFormatter={(value) => formatCurrency(value)} />
+                      <YAxis type="category" dataKey="name" width={100} />
                       <Tooltip
-                        formatter={(value: number, name: string) => [
-                          `${formatCurrency(value)}`,
-                          name
-                        ]}
+                        formatter={(value: number) => [formatCurrency(value), t('reports.value')]}
                       />
-                      <Funnel dataKey="value" data={funnelData}>
-                        <LabelList
-                          position="right"
-                          fill="#888"
-                          stroke="none"
-                          dataKey="name"
-                        />
-                        <LabelList
-                          position="center"
-                          fill="#fff"
-                          stroke="none"
-                          formatter={(value: number) => formatCurrency(value)}
-                        />
-                      </Funnel>
-                    </FunnelChart>
+                      <Bar dataKey="value" fill="#6366f1">
+                        {funnelData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-[300px] flex items-center justify-center text-muted-foreground">

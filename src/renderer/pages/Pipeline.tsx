@@ -542,14 +542,14 @@ export default function Pipeline() {
             <div className="space-y-2">
               <Label htmlFor="contact">{t('pipeline.linkedContact')}</Label>
               <Select
-                value={dealForm.contact_id}
-                onValueChange={(value) => setDealForm(prev => ({ ...prev, contact_id: value }))}
+                value={dealForm.contact_id || '_none'}
+                onValueChange={(value) => setDealForm(prev => ({ ...prev, contact_id: value === '_none' ? '' : value }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={t('pipeline.selectContact')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t('pipeline.noContact')}</SelectItem>
+                  <SelectItem value="_none">{t('pipeline.noContact')}</SelectItem>
                   {contacts.map(contact => (
                     <SelectItem key={contact.id} value={contact.id}>
                       {contact.name} {contact.company && `(${contact.company})`}

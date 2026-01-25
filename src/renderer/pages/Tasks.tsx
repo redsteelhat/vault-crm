@@ -569,14 +569,14 @@ export default function Tasks() {
             <div className="space-y-2">
               <Label htmlFor="contact">{t('pipeline.linkedContact')}</Label>
               <Select
-                value={taskForm.contact_id}
-                onValueChange={(value) => setTaskForm(prev => ({ ...prev, contact_id: value }))}
+                value={taskForm.contact_id || '_none'}
+                onValueChange={(value) => setTaskForm(prev => ({ ...prev, contact_id: value === '_none' ? '' : value }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={t('pipeline.selectContact')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t('pipeline.noContact')}</SelectItem>
+                  <SelectItem value="_none">{t('pipeline.noContact')}</SelectItem>
                   {contacts.map(contact => (
                     <SelectItem key={contact.id} value={contact.id}>
                       {contact.name}
@@ -589,14 +589,14 @@ export default function Tasks() {
             <div className="space-y-2">
               <Label htmlFor="deal">{t('tasks.linkedDeal')}</Label>
               <Select
-                value={taskForm.deal_id}
-                onValueChange={(value) => setTaskForm(prev => ({ ...prev, deal_id: value }))}
+                value={taskForm.deal_id || '_none'}
+                onValueChange={(value) => setTaskForm(prev => ({ ...prev, deal_id: value === '_none' ? '' : value }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={t('tasks.selectDeal')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t('tasks.noDeal')}</SelectItem>
+                  <SelectItem value="_none">{t('tasks.noDeal')}</SelectItem>
                   {deals.map(deal => (
                     <SelectItem key={deal.id} value={deal.id}>
                       {deal.name}
