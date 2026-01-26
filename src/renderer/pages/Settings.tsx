@@ -638,6 +638,143 @@ export function Settings() {
             </CardContent>
           </Card>
 
+          {/* AI & Privacy */}
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                AI & Privacy
+              </CardTitle>
+              <CardDescription>Configure AI features and privacy settings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* AI Mode */}
+              <div className="space-y-2">
+                <Label>AI Mode</Label>
+                <Select defaultValue="off">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="off">Off</SelectItem>
+                    <SelectItem value="local">Local (Ollama)</SelectItem>
+                    <SelectItem value="cloud">Cloud (OpenAI/Anthropic)</SelectItem>
+                    <SelectItem value="hybrid">Hybrid</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Choose how AI features are processed
+                </p>
+              </div>
+
+              {/* Local AI Config */}
+              <div className="space-y-2 p-4 rounded-lg bg-muted/50">
+                <Label>Local AI Configuration</Label>
+                <div className="space-y-2">
+                  <div>
+                    <Label htmlFor="localEndpoint" className="text-xs">Endpoint</Label>
+                    <Input
+                      id="localEndpoint"
+                      defaultValue="http://localhost:11434"
+                      placeholder="http://localhost:11434"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="localModel" className="text-xs">Model</Label>
+                    <Select defaultValue="llama3.2">
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="llama3.2">llama3.2</SelectItem>
+                        <SelectItem value="mistral">mistral</SelectItem>
+                        <SelectItem value="codellama">codellama</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button variant="outline" size="sm" className="w-full">
+                    Test Connection
+                  </Button>
+                </div>
+              </div>
+
+              {/* Cloud AI Config */}
+              <div className="space-y-2 p-4 rounded-lg bg-muted/50">
+                <Label>Cloud AI Configuration</Label>
+                <div className="space-y-2">
+                  <div>
+                    <Label htmlFor="cloudProvider" className="text-xs">Provider</Label>
+                    <Select defaultValue="openai">
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="openai">OpenAI</SelectItem>
+                        <SelectItem value="anthropic">Anthropic</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="apiKey" className="text-xs">API Key</Label>
+                    <Input
+                      id="apiKey"
+                      type="password"
+                      placeholder="Enter API key"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="cloudModel" className="text-xs">Model</Label>
+                    <Input
+                      id="cloudModel"
+                      placeholder="gpt-4, claude-3, etc."
+                    />
+                  </div>
+                  <Button variant="outline" size="sm" className="w-full">
+                    Test Connection
+                  </Button>
+                </div>
+              </div>
+
+              {/* Data Boundary */}
+              <div className="space-y-2">
+                <Label>Data Boundary</Label>
+                <div className="space-y-2 p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sendName" className="text-sm font-normal">Send contact name</Label>
+                    <Switch id="sendName" defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sendCompany" className="text-sm font-normal">Send company</Label>
+                    <Switch id="sendCompany" defaultChecked={false} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sendNotes" className="text-sm font-normal">Send notes</Label>
+                    <Switch id="sendNotes" defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sendEmail" className="text-sm font-normal">Send email</Label>
+                    <Switch id="sendEmail" defaultChecked={false} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Redaction */}
+              <div className="space-y-2">
+                <Label>Redaction</Label>
+                <div className="space-y-2 p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="maskEmail" className="text-sm font-normal">Mask email addresses</Label>
+                    <Switch id="maskEmail" defaultChecked={false} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="maskPhone" className="text-sm font-normal">Mask phone numbers</Label>
+                    <Switch id="maskPhone" defaultChecked={false} />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Auto Backup */}
           <Card className="border-none shadow-sm">
             <CardHeader>
