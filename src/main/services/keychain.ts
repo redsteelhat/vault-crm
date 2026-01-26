@@ -28,12 +28,16 @@ function getConfigPath(): string {
 export function loadVaultConfig(): VaultConfig | null {
   const configPath = getConfigPath()
   if (!existsSync(configPath)) {
+    console.log('Vault config file not found at:', configPath)
     return null
   }
   try {
     const data = readFileSync(configPath, 'utf-8')
-    return JSON.parse(data)
-  } catch {
+    const config = JSON.parse(data)
+    console.log('Vault config loaded successfully')
+    return config
+  } catch (error) {
+    console.error('Failed to load vault config:', error)
     return null
   }
 }
@@ -41,7 +45,18 @@ export function loadVaultConfig(): VaultConfig | null {
 // Save vault config
 function saveVaultConfig(config: VaultConfig): void {
   const configPath = getConfigPath()
-  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+  try {
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+    console.log('Vault config saved successfully to:', configPath)
+    // Verify the file was saved correctly
+    const verify = loadVaultConfig()
+    if (!verify || verify.passwordHash !== config.passwordHash) {
+      throw new Error('Config file verification failed')
+    }
+  } catch (error) {
+    console.error('Failed to save vault config:', error)
+    throw error
+  }
 }
 
 // Check if vault is set up (has master password)
@@ -59,54 +74,103 @@ function hashPassword(password: string, salt: Buffer): string {
 
 // Set up vault with master password (first time setup)
 export async function setupVault(masterPassword: string): Promise<Buffer> {
-  // Generate salt for password derivation
-  const salt = generateSalt()
-  
-  // Generate database encryption key
-  const dbKey = randomBytes(32) // 256-bit key
-  
-  // Derive password hash for verification
-  const passwordHash = hashPassword(masterPassword, salt)
-  
-  // Store the db key in OS keychain (encrypted by OS)
-  await keytar.setPassword(SERVICE_NAME, ACCOUNT_DB_KEY, dbKey.toString('base64'))
-  
-  // Save vault config
-  const config: VaultConfig = {
-    salt: salt.toString('base64'),
-    passwordHash,
-    idleTimeout: 15, // 15 minutes default
-    lockOnMinimize: false,
-    createdAt: new Date().toISOString()
+  try {
+    // Generate salt for password derivation
+    const salt = generateSalt()
+    
+    // Generate database encryption key
+    const dbKey = randomBytes(32) // 256-bit key
+    
+    // Derive password hash for verification
+    const passwordHash = hashPassword(masterPassword, salt)
+    
+    console.log('Setting up vault...')
+    console.log('Salt length:', salt.length)
+    console.log('Password hash length:', passwordHash.length)
+    
+    // Store the db key in OS keychain (encrypted by OS)
+    try {
+      await keytar.setPassword(SERVICE_NAME, ACCOUNT_DB_KEY, dbKey.toString('base64'))
+      console.log('Database key stored in keychain')
+      
+      // Verify key was stored
+      const verifyKey = await keytar.getPassword(SERVICE_NAME, ACCOUNT_DB_KEY)
+      if (!verifyKey || verifyKey !== dbKey.toString('base64')) {
+        throw new Error('Keychain verification failed - key was not stored correctly')
+      }
+      console.log('Keychain verification successful')
+    } catch (keychainError) {
+      console.error('Keychain error:', keychainError)
+      throw new Error(`KEYCHAIN_ERROR: ${(keychainError as Error).message}`)
+    }
+    
+    // Save vault config
+    const config: VaultConfig = {
+      salt: salt.toString('base64'),
+      passwordHash,
+      idleTimeout: 15, // 15 minutes default
+      lockOnMinimize: false,
+      createdAt: new Date().toISOString()
+    }
+    saveVaultConfig(config)
+    
+    console.log('Vault setup complete')
+    return dbKey
+  } catch (error) {
+    console.error('Vault setup failed:', error)
+    throw error
   }
-  saveVaultConfig(config)
-  
-  console.log('Vault setup complete')
-  return dbKey
 }
 
 // Unlock vault with master password
 export async function unlockVault(masterPassword: string): Promise<Buffer> {
+  console.log('Attempting to unlock vault...')
+  
   const config = loadVaultConfig()
   if (!config) {
+    console.error('Vault config not found')
     throw new Error('VAULT_NOT_SETUP')
   }
   
-  const salt = Buffer.from(config.salt, 'base64')
-  const passwordHash = hashPassword(masterPassword, salt)
+  console.log('Vault config loaded, verifying password...')
   
-  // Verify password
-  if (passwordHash !== config.passwordHash) {
-    throw new Error('INVALID_PASSWORD')
+  try {
+    const salt = Buffer.from(config.salt, 'base64')
+    const passwordHash = hashPassword(masterPassword, salt)
+    
+    console.log('Computed password hash length:', passwordHash.length)
+    console.log('Stored password hash length:', config.passwordHash.length)
+    
+    // Verify password
+    if (passwordHash !== config.passwordHash) {
+      console.error('Password verification failed')
+      console.error('Expected hash:', config.passwordHash.substring(0, 16) + '...')
+      console.error('Computed hash:', passwordHash.substring(0, 16) + '...')
+      throw new Error('INVALID_PASSWORD')
+    }
+    
+    console.log('Password verified successfully')
+    
+    // Get db key from keychain
+    let dbKeyBase64: string | null = null
+    try {
+      dbKeyBase64 = await keytar.getPassword(SERVICE_NAME, ACCOUNT_DB_KEY)
+    } catch (keychainError) {
+      console.error('Keychain access error:', keychainError)
+      throw new Error(`KEYCHAIN_ERROR: ${(keychainError as Error).message}`)
+    }
+    
+    if (!dbKeyBase64) {
+      console.error('Database key not found in keychain')
+      throw new Error('KEY_NOT_FOUND')
+    }
+    
+    console.log('Database key retrieved from keychain')
+    return Buffer.from(dbKeyBase64, 'base64')
+  } catch (error) {
+    console.error('Vault unlock failed:', error)
+    throw error
   }
-  
-  // Get db key from keychain
-  const dbKeyBase64 = await keytar.getPassword(SERVICE_NAME, ACCOUNT_DB_KEY)
-  if (!dbKeyBase64) {
-    throw new Error('KEY_NOT_FOUND')
-  }
-  
-  return Buffer.from(dbKeyBase64, 'base64')
 }
 
 // Change master password and rekey database

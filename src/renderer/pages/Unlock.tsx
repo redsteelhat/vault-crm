@@ -61,7 +61,11 @@ export function Unlock({ onUnlock }: UnlockProps) {
       if (result.success) {
         onUnlock()
       } else {
-        setError(result.error || t('errors.generic'))
+        if (result.error?.includes('KEYCHAIN_ERROR')) {
+          setError(t('vault.keychainError', 'Keychain access failed. Please try restarting the application or check your system keychain permissions.'))
+        } else {
+          setError(result.error || t('errors.generic'))
+        }
       }
     } catch {
       setError(t('errors.generic'))
@@ -88,6 +92,10 @@ export function Unlock({ onUnlock }: UnlockProps) {
           setError(t('vault.wrongPassword'))
         } else if (result.error === 'DECRYPTION_FAILED') {
           setError(t('vault.decryptionFailed', 'Failed to decrypt vault. Wrong password or corrupted data.'))
+        } else if (result.error?.includes('KEYCHAIN_ERROR')) {
+          setError(t('vault.keychainError', 'Keychain access failed. Please try restarting the application or check your system keychain permissions.'))
+        } else if (result.error === 'KEY_NOT_FOUND') {
+          setError(t('vault.keyNotFound', 'Database encryption key not found. The vault may need to be reset.'))
         } else {
           setError(result.error || t('errors.generic'))
         }
