@@ -1,5 +1,6 @@
 import { net } from 'electron'
 import * as settingsRepo from '../database/repositories/settings'
+import * as keychainService from './keychain'
 
 // AI Provider types
 export type AIProvider = 'local' | 'openai' | 'anthropic'
@@ -25,13 +26,30 @@ interface ChatResponse {
 /**
  * Get AI configuration from settings
  */
-export function getAIConfig(): AIConfig {
+export async function getAIConfig(): Promise<AIConfig> {
   const provider = settingsRepo.getSetting('ai_provider') as AIProvider || 'local'
+  
+  // Get API keys from keychain
+  let openaiApiKey = ''
+  let anthropicApiKey = ''
+  
+  try {
+    openaiApiKey = await keychainService.getKey('vaultcrm_ai_openai_key') || ''
+  } catch {
+    // Key not found, that's fine
+  }
+  
+  try {
+    anthropicApiKey = await keychainService.getKey('vaultcrm_ai_anthropic_key') || ''
+  } catch {
+    // Key not found, that's fine
+  }
+  
   return {
     provider,
     localEndpoint: settingsRepo.getSetting('ai_local_endpoint') || 'http://localhost:11434',
-    openaiApiKey: settingsRepo.getSetting('ai_openai_key') || '',
-    anthropicApiKey: settingsRepo.getSetting('ai_anthropic_key') || '',
+    openaiApiKey,
+    anthropicApiKey,
     model: settingsRepo.getSetting('ai_model') || 'llama3.2'
   }
 }
@@ -39,19 +57,83 @@ export function getAIConfig(): AIConfig {
 /**
  * Save AI configuration
  */
-export function setAIConfig(config: Partial<AIConfig>): void {
+export async function setAIConfig(config: Partial<AIConfig>): Promise<void> {
   if (config.provider) settingsRepo.setSetting('ai_provider', config.provider)
   if (config.localEndpoint) settingsRepo.setSetting('ai_local_endpoint', config.localEndpoint)
-  if (config.openaiApiKey) settingsRepo.setSetting('ai_openai_key', config.openaiApiKey)
-  if (config.anthropicApiKey) settingsRepo.setSetting('ai_anthropic_key', config.anthropicApiKey)
   if (config.model) settingsRepo.setSetting('ai_model', config.model)
+  
+  // Save API keys to keychain
+  if (config.openaiApiKey !== undefined) {
+    if (config.openaiApiKey) {
+      await keychainService.setKey('vaultcrm_ai_openai_key', config.openaiApiKey)
+    } else {
+      await keychainService.deleteKey('vaultcrm_ai_openai_key')
+    }
+  }
+  
+  if (config.anthropicApiKey !== undefined) {
+    if (config.anthropicApiKey) {
+      await keychainService.setKey('vaultcrm_ai_anthropic_key', config.anthropicApiKey)
+    } else {
+      await keychainService.deleteKey('vaultcrm_ai_anthropic_key')
+    }
+  }
+}
+
+/**
+ * Save API key for a provider
+ */
+export async function saveApiKey(provider: 'openai' | 'anthropic', key: string): Promise<void> {
+  const keyName = provider === 'openai' ? 'vaultcrm_ai_openai_key' : 'vaultcrm_ai_anthropic_key'
+  await keychainService.setKey(keyName, key)
+}
+
+/**
+ * Get API key for a provider
+ */
+export async function getApiKey(provider: 'openai' | 'anthropic'): Promise<string | null> {
+  const keyName = provider === 'openai' ? 'vaultcrm_ai_openai_key' : 'vaultcrm_ai_anthropic_key'
+  try {
+    return await keychainService.getKey(keyName)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Redact email addresses from text
+ */
+export function redactEmails(text: string): string {
+  return text.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '[EMAIL_REDACTED]')
+}
+
+/**
+ * Redact phone numbers from text
+ */
+export function redactPhones(text: string): string {
+  // Match various phone number formats
+  return text.replace(/\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, '[PHONE_REDACTED]')
+}
+
+/**
+ * Apply redaction based on settings
+ */
+export function applyRedaction(text: string, maskEmail: boolean, maskPhone: boolean): string {
+  let result = text
+  if (maskEmail) {
+    result = redactEmails(result)
+  }
+  if (maskPhone) {
+    result = redactPhones(result)
+  }
+  return result
 }
 
 /**
  * Check if local AI (Ollama) is available
  */
 export async function checkLocalAIAvailable(): Promise<boolean> {
-  const config = getAIConfig()
+  const config = await getAIConfig()
   
   try {
     const response = await fetchWithTimeout(`${config.localEndpoint}/api/tags`, 3000)
@@ -65,7 +147,7 @@ export async function checkLocalAIAvailable(): Promise<boolean> {
  * Get available local models
  */
 export async function getLocalModels(): Promise<string[]> {
-  const config = getAIConfig()
+  const config = await getAIConfig()
   
   try {
     const response = await fetch(`${config.localEndpoint}/api/tags`)
@@ -82,7 +164,7 @@ export async function getLocalModels(): Promise<string[]> {
  * Chat with AI
  */
 export async function chat(messages: ChatMessage[]): Promise<ChatResponse> {
-  const config = getAIConfig()
+  const config = await getAIConfig()
 
   switch (config.provider) {
     case 'local':

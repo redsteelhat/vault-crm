@@ -58,6 +58,7 @@ declare global {
 import { useToast } from '@/hooks/useToast'
 import { DuplicateMergeDialog } from '@/components/DuplicateMergeDialog'
 import { LinkedInParser } from '@/components/LinkedInParser'
+import { BatchEnrichmentDialog } from '@/components/BatchEnrichmentDialog'
 import { UpgradePrompt } from '@/components/UpgradePrompt'
 import { FilterPanel, type ContactFilters } from '@/components/FilterPanel'
 import { ContactsTable } from '@/components/ContactsTable'
@@ -97,6 +98,7 @@ export function Contacts() {
   const [isDuplicateOpen, setIsDuplicateOpen] = useState(false)
   const [isLinkedInOpen, setIsLinkedInOpen] = useState(false)
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false)
+  const [isBatchEnrichOpen, setIsBatchEnrichOpen] = useState(false)
   const [_tierInfo, setTierInfo] = useState<{ tier: 'free' | 'pro'; contactsRemaining: number } | null>(null)
   const [localSearch, setLocalSearch] = useState(searchQuery)
   
@@ -123,6 +125,9 @@ export function Contacts() {
 
   // Filtered contacts
   const [filteredContacts, setFilteredContacts] = useState(contacts)
+  
+  // Favicon cache for contacts
+  const [contactFavicons, setContactFavicons] = useState<Map<string, string>>(new Map())
 
   const [newContact, setNewContact] = useState({
     name: '',
@@ -145,6 +150,37 @@ export function Contacts() {
   useEffect(() => {
     applyFiltersAndSort()
   }, [contacts, filters, sortBy, sortOrder, searchQuery])
+
+  // Load favicons for contacts
+  useEffect(() => {
+    const loadFavicons = async () => {
+      const faviconMap = new Map<string, string>()
+      
+      for (const contact of filteredContacts) {
+        const emails = parseEmails(contact.emails)
+        if (emails.length > 0) {
+          try {
+            const domain = await window.api.enrichment.extractDomain(emails[0])
+            if (domain) {
+              const skipDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'live.com', 'msn.com']
+              if (!skipDomains.includes(domain.toLowerCase())) {
+                const faviconUrl = await window.api.enrichment.getFaviconUrl(domain)
+                faviconMap.set(contact.id, faviconUrl)
+              }
+            }
+          } catch {
+            // Ignore errors
+          }
+        }
+      }
+      
+      setContactFavicons(faviconMap)
+    }
+    
+    if (filteredContacts.length > 0) {
+      loadFavicons()
+    }
+  }, [filteredContacts])
 
   useEffect(() => {
     localStorage.setItem('contactsViewMode', viewMode)
@@ -506,6 +542,14 @@ export function Contacts() {
                   <Tag className="h-4 w-4 mr-1" />
                   {t('bulk.addTagToSelected')}
                 </Button>
+                <Button variant="outline" size="sm" onClick={() => {
+                  if (selectedIds.size > 0) {
+                    setIsBatchEnrichOpen(true)
+                  }
+                }}>
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  Enrich Selected
+                </Button>
                 <Button variant="outline" size="sm" className="text-destructive" onClick={handleBulkDelete}>
                   <Trash2 className="h-4 w-4 mr-1" />
                   {t('bulk.deleteSelected')}
@@ -595,9 +639,29 @@ export function Contacts() {
                                 onCheckedChange={() => handleSelectContact(contact.id)}
                                 className="absolute -top-1 -left-1 opacity-0 group-hover:opacity-100 transition-opacity bg-background"
                               />
-                              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary shrink-0">
-                                {getInitials(contact.name)}
-                              </div>
+                              {contactFavicons.has(contact.id) ? (
+                                <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-border">
+                                  <img
+                                    src={contactFavicons.get(contact.id)}
+                                    alt={contact.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      // Fallback to initials on error
+                                      const target = e.target as HTMLImageElement
+                                      target.style.display = 'none'
+                                      const parent = target.parentElement
+                                      if (parent) {
+                                        parent.className = 'w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary shrink-0'
+                                        parent.textContent = getInitials(contact.name)
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary shrink-0">
+                                  {getInitials(contact.name)}
+                                </div>
+                              )}
                             </div>
                             <Link
                               to={`/contacts/${contact.id}`}
@@ -813,6 +877,21 @@ export function Contacts() {
         open={isDuplicateOpen}
         onOpenChange={setIsDuplicateOpen}
         onMergeComplete={() => fetchContacts()}
+      />
+
+      {/* Batch Enrichment Dialog */}
+      <BatchEnrichmentDialog
+        open={isBatchEnrichOpen}
+        onOpenChange={setIsBatchEnrichOpen}
+        contactIds={Array.from(selectedIds)}
+        onComplete={(results, errors) => {
+          if (errors.length === 0) {
+            toast({ title: `Enriched ${Object.keys(results).length} contacts`, variant: 'success' })
+            fetchContacts()
+          } else {
+            toast({ title: `Enriched ${Object.keys(results).length} contacts, ${errors.length} errors`, variant: 'default' })
+          }
+        }}
       />
 
       {/* LinkedIn Parser Dialog */}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { MoreVertical, Mail, Phone, Building2, MapPin, ExternalLink } from 'lucide-react'
@@ -49,9 +49,42 @@ export function ContactsTable({
 }: ContactsTableProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  
+  const [contactFavicons, setContactFavicons] = useState<Map<string, string>>(new Map())
 
   const isAllSelected = contacts.length > 0 && selectedIds.size === contacts.length
   const isSomeSelected = selectedIds.size > 0 && selectedIds.size < contacts.length
+
+  // Load favicons for contacts
+  useEffect(() => {
+    const loadFavicons = async () => {
+      const faviconMap = new Map<string, string>()
+      
+      for (const contact of contacts) {
+        const emails = parseEmails(contact.emails)
+        if (emails.length > 0) {
+          try {
+            const domain = await window.api.enrichment.extractDomain(emails[0])
+            if (domain) {
+              const skipDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'live.com', 'msn.com']
+              if (!skipDomains.includes(domain.toLowerCase())) {
+                const faviconUrl = await window.api.enrichment.getFaviconUrl(domain)
+                faviconMap.set(contact.id, faviconUrl)
+              }
+            }
+          } catch {
+            // Ignore errors
+          }
+        }
+      }
+      
+      setContactFavicons(faviconMap)
+    }
+    
+    if (contacts.length > 0) {
+      loadFavicons()
+    }
+  }, [contacts])
 
   const handleSelectAll = () => {
     if (isAllSelected) {
@@ -119,9 +152,28 @@ export function ContactsTable({
                     to={`/contacts/${contact.id}`}
                     className="flex items-center gap-3 hover:text-primary transition-colors"
                   >
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary shrink-0">
-                      {getInitials(contact.name)}
-                    </div>
+                    {contactFavicons.has(contact.id) ? (
+                      <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-border">
+                        <img
+                          src={contactFavicons.get(contact.id)}
+                          alt={contact.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement
+                            target.style.display = 'none'
+                            const parent = target.parentElement
+                            if (parent) {
+                              parent.className = 'w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary shrink-0'
+                              parent.textContent = getInitials(contact.name)
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary shrink-0">
+                        {getInitials(contact.name)}
+                      </div>
+                    )}
                     <div>
                       <p className="font-medium">{contact.name}</p>
                       {contact.title && (

@@ -50,6 +50,7 @@ import { useToast } from '@/hooks/useToast'
 import { formatDate, formatDateTime, parseEmails, parsePhones, getInitials, cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { InteractionAnalyticsChart } from '@/components/charts/InteractionAnalyticsChart'
+import { AIAssistPanel } from '@/components/AIAssistPanel'
 
 interface Interaction {
   id: string
@@ -99,6 +100,8 @@ export function ContactDetail() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isAddNoteOpen, setIsAddNoteOpen] = useState(false)
   const [isAddFollowUpOpen, setIsAddFollowUpOpen] = useState(false)
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null)
+  const [companySuggestion, setCompanySuggestion] = useState<string | null>(null)
   const [editData, setEditData] = useState({
     name: '',
     email: '',
@@ -121,6 +124,54 @@ export function ContactDetail() {
       loadInteractionStats()
     }
   }, [id, selectContact, fetchTags])
+
+  // Load company logo and suggestions
+  useEffect(() => {
+    const loadEnrichment = async () => {
+      if (!selectedContact) return
+      
+      const emails = parseEmails(selectedContact.emails)
+      if (emails.length > 0) {
+        try {
+          const domain = await window.api.enrichment.extractDomain(emails[0])
+          if (domain) {
+            const skipDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'live.com', 'msn.com']
+            if (!skipDomains.includes(domain.toLowerCase())) {
+              // Try to get logo
+              try {
+                const logoUrl = await window.api.enrichment.getLogoUrl(domain)
+                // Check if logo exists by trying to load it
+                const img = new Image()
+                img.onload = () => setCompanyLogo(logoUrl)
+                img.onerror = () => setCompanyLogo(null)
+                img.src = logoUrl
+              } catch {
+                setCompanyLogo(null)
+              }
+              
+              // Get suggestions if no company
+              if (!selectedContact.company) {
+                const suggestions = await window.api.enrichment.getSuggestions({
+                  emails: selectedContact.emails,
+                  company: selectedContact.company
+                })
+                if (suggestions.length > 0) {
+                  const companyMatch = suggestions[0].match(/Company might be: (.+)/)
+                  if (companyMatch) {
+                    setCompanySuggestion(companyMatch[1])
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load enrichment:', error)
+        }
+      }
+    }
+    
+    loadEnrichment()
+  }, [selectedContact])
 
   useEffect(() => {
     if (selectedContact) {
@@ -241,6 +292,12 @@ export function ContactDetail() {
     await removeTagFromContact(id, tagId)
   }
 
+  // Get recent interactions as notes for AI
+  const recentNotes = interactions
+    .filter(i => i.type === 'note')
+    .map(i => i.body)
+    .slice(0, 10) // Last 10 notes
+
   if (!selectedContact) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -273,18 +330,58 @@ export function ContactDetail() {
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4">
-                    <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-semibold text-primary">
-                      {getInitials(selectedContact.name)}
-                    </div>
-                    <div>
+                    {companyLogo ? (
+                      <div className="w-20 h-20 rounded-full overflow-hidden border border-border shrink-0">
+                        <img
+                          src={companyLogo}
+                          alt={selectedContact.company || selectedContact.name}
+                          className="w-full h-full object-cover"
+                          onError={() => setCompanyLogo(null)}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-semibold text-primary shrink-0">
+                        {getInitials(selectedContact.name)}
+                      </div>
+                    )}
+                    <div className="flex-1">
                       <h2 className="text-2xl font-bold">{selectedContact.name}</h2>
                       {selectedContact.title && (
                         <p className="text-muted-foreground">{selectedContact.title}</p>
                       )}
-                      {selectedContact.company && (
+                      {selectedContact.company ? (
                         <p className="text-muted-foreground flex items-center gap-1 mt-1">
                           <Building2 className="h-4 w-4" /> {selectedContact.company}
                         </p>
+                      ) : companySuggestion && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline" className="text-xs">
+                            Suggested: {companySuggestion}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              if (!id) return
+                              try {
+                                await updateContact(id, { company: companySuggestion })
+                                setCompanySuggestion(null)
+                                toast({ title: 'Company updated', variant: 'success' })
+                              } catch {
+                                toast({ title: 'Failed to update', variant: 'destructive' })
+                              }
+                            }}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setCompanySuggestion(null)}
+                          >
+                            Dismiss
+                          </Button>
+                        </div>
                       )}
                       <div className="flex flex-wrap gap-2 mt-3">
                         {selectedContactTags.map((tag) => (
@@ -473,6 +570,18 @@ export function ContactDetail() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* AI Assist Panel */}
+              {id && (
+                <AIAssistPanel
+                  contactId={id}
+                  contactName={selectedContact.name}
+                  company={selectedContact.company}
+                  recentInteractions={recentNotes}
+                  existingTags={tags.map(t => t.name)}
+                  lastContactDate={selectedContact.last_contact_at}
+                />
+              )}
             </div>
           </div>
 

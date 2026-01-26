@@ -1,4 +1,4 @@
-import { net } from 'electron'
+import { net, BrowserWindow } from 'electron'
 import * as contactsRepo from '../database/repositories/contacts'
 
 interface EnrichmentResult {
@@ -6,6 +6,35 @@ interface EnrichmentResult {
   logo?: string
   companyName?: string
   domain?: string
+}
+
+// Cache for domain assets (24 hour TTL)
+interface CacheEntry {
+  assets: { favicon?: string; logo?: string }
+  timestamp: number
+}
+
+const domainCache = new Map<string, CacheEntry>()
+const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+
+function getCachedAssets(domain: string): { favicon?: string; logo?: string } | null {
+  const entry = domainCache.get(domain)
+  if (!entry) return null
+  
+  const now = Date.now()
+  if (now - entry.timestamp > CACHE_TTL) {
+    domainCache.delete(domain)
+    return null
+  }
+  
+  return entry.assets
+}
+
+function setCachedAssets(domain: string, assets: { favicon?: string; logo?: string }): void {
+  domainCache.set(domain, {
+    assets,
+    timestamp: Date.now()
+  })
 }
 
 /**
@@ -35,6 +64,12 @@ export function getLogoUrl(domain: string): string {
  * Fetch favicon/logo for a domain
  */
 export async function fetchDomainAssets(domain: string): Promise<{ favicon?: string; logo?: string }> {
+  // Check cache first
+  const cached = getCachedAssets(domain)
+  if (cached) {
+    return cached
+  }
+
   const result: { favicon?: string; logo?: string } = {}
 
   // Always return favicon URL (Google's service is reliable)
@@ -50,6 +85,9 @@ export async function fetchDomainAssets(domain: string): Promise<{ favicon?: str
   } catch {
     // Logo not available, that's fine
   }
+
+  // Cache the result
+  setCachedAssets(domain, result)
 
   return result
 }
@@ -135,6 +173,183 @@ export async function batchEnrichContacts(contactIds: string[]): Promise<Map<str
   }
 
   return results
+}
+
+// Batch queue state
+interface BatchJob {
+  id: string
+  contactIds: string[]
+  processed: number
+  results: Map<string, EnrichmentResult>
+  errors: string[]
+  status: 'running' | 'paused' | 'cancelled' | 'completed'
+  concurrency: number
+}
+
+let currentBatchJob: BatchJob | null = null
+
+/**
+ * Start batch enrichment with queue and progress events
+ */
+export async function startBatchEnrichment(
+  contactIds: string[],
+  options: { concurrency?: number } = {}
+): Promise<{ jobId: string }> {
+  if (currentBatchJob && currentBatchJob.status === 'running') {
+    throw new Error('A batch enrichment job is already running')
+  }
+
+  const jobId = `batch_${Date.now()}`
+  const concurrency = options.concurrency || 3
+
+  currentBatchJob = {
+    id: jobId,
+    contactIds: [...contactIds],
+    processed: 0,
+    results: new Map(),
+    errors: [],
+    status: 'running',
+    concurrency
+  }
+
+  // Start processing in background
+  processBatchQueue(jobId).catch((error) => {
+    console.error('Batch enrichment error:', error)
+    if (currentBatchJob?.id === jobId) {
+      currentBatchJob.status = 'cancelled'
+      const windows = BrowserWindow.getAllWindows()
+    windows.forEach(win => {
+      win.webContents.send('enrichment:batchError', { error: error.message })
+    })
+    }
+  })
+
+  return { jobId }
+}
+
+async function processBatchQueue(jobId: string) {
+  if (!currentBatchJob || currentBatchJob.id !== jobId) return
+
+  const { contactIds, concurrency } = currentBatchJob
+  const total = contactIds.length
+
+  // Process in batches with concurrency
+  for (let i = 0; i < contactIds.length; i += concurrency) {
+    // Check if job was cancelled or paused
+    if (!currentBatchJob || currentBatchJob.id !== jobId) return
+    if (currentBatchJob.status === 'cancelled') return
+    if (currentBatchJob.status === 'paused') {
+      // Wait for resume
+      await waitForResume(jobId)
+      if (!currentBatchJob || currentBatchJob.id !== jobId) return
+    }
+
+    const batch = contactIds.slice(i, i + concurrency)
+    const promises = batch.map(async (contactId) => {
+      try {
+        const result = await enrichContact(contactId)
+        if (currentBatchJob && currentBatchJob.id === jobId) {
+          currentBatchJob.results.set(contactId, result)
+          currentBatchJob.processed++
+          
+          // Get contact name for progress
+          const contact = contactsRepo.getContactById(contactId)
+          const contactName = contact?.name || contactId
+
+          // Emit progress event
+          const windows = BrowserWindow.getAllWindows()
+          windows.forEach(win => {
+            win.webContents.send('enrichment:batchProgress', {
+              processed: currentBatchJob.processed,
+              total,
+              current: contactName
+            })
+          })
+        }
+      } catch (error) {
+        if (currentBatchJob && currentBatchJob.id === jobId) {
+          currentBatchJob.errors.push(contactId)
+          currentBatchJob.processed++
+          const contact = contactsRepo.getContactById(contactId)
+          const contactName = contact?.name || contactId
+          const windows = BrowserWindow.getAllWindows()
+          windows.forEach(win => {
+            win.webContents.send('enrichment:batchProgress', {
+              processed: currentBatchJob.processed,
+              total,
+              current: contactName
+            })
+          })
+        }
+      }
+    })
+
+    await Promise.all(promises)
+  }
+
+  // Job completed
+  if (currentBatchJob && currentBatchJob.id === jobId) {
+    currentBatchJob.status = 'completed'
+    const windows = BrowserWindow.getAllWindows()
+    windows.forEach(win => {
+      win.webContents.send('enrichment:batchDone', {
+        results: Object.fromEntries(currentBatchJob.results),
+        errors: currentBatchJob.errors
+      })
+    })
+    currentBatchJob = null
+  }
+}
+
+async function waitForResume(jobId: string): Promise<void> {
+  return new Promise((resolve) => {
+    const checkInterval = setInterval(() => {
+      if (!currentBatchJob || currentBatchJob.id !== jobId) {
+        clearInterval(checkInterval)
+        resolve()
+        return
+      }
+      if (currentBatchJob.status === 'running') {
+        clearInterval(checkInterval)
+        resolve()
+        return
+      }
+      if (currentBatchJob.status === 'cancelled') {
+        clearInterval(checkInterval)
+        resolve()
+        return
+      }
+    }, 100)
+  })
+}
+
+export function pauseBatchEnrichment(): { success: boolean } {
+  if (!currentBatchJob || currentBatchJob.status !== 'running') {
+    return { success: false }
+  }
+  currentBatchJob.status = 'paused'
+  return { success: true }
+}
+
+export function resumeBatchEnrichment(): { success: boolean } {
+  if (!currentBatchJob || currentBatchJob.status !== 'paused') {
+    return { success: false }
+  }
+  currentBatchJob.status = 'running'
+  // Resume processing
+  processBatchQueue(currentBatchJob.id).catch((error) => {
+    console.error('Batch enrichment resume error:', error)
+  })
+  return { success: true }
+}
+
+export function cancelBatchEnrichment(): { success: boolean } {
+  if (!currentBatchJob) {
+    return { success: false }
+  }
+  currentBatchJob.status = 'cancelled'
+  currentBatchJob = null
+  return { success: true }
 }
 
 /**

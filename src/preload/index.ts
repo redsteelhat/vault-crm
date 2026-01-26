@@ -454,6 +454,57 @@ const api = {
     }> => ipcRenderer.invoke('automations:getStats')
   },
 
+  // AI Assistant
+  ai: {
+    getConfig: (): Promise<{
+      provider: 'local' | 'openai' | 'anthropic'
+      localEndpoint?: string
+      openaiApiKey?: string
+      anthropicApiKey?: string
+      model?: string
+    }> => ipcRenderer.invoke('ai:getConfig'),
+    setConfig: (config: Partial<{
+      provider: string
+      localEndpoint: string
+      openaiApiKey: string
+      anthropicApiKey: string
+      model: string
+    }>): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('ai:setConfig', config),
+    checkLocalAvailable: (): Promise<boolean> =>
+      ipcRenderer.invoke('ai:checkLocalAvailable'),
+    getLocalModels: (): Promise<string[]> =>
+      ipcRenderer.invoke('ai:getLocalModels'),
+    summarizeNotes: (notes: string[]): Promise<string> =>
+      ipcRenderer.invoke('ai:summarizeNotes', notes),
+    suggestFollowUp: (context: {
+      contactName: string
+      recentInteractions: string[]
+      lastContactDate?: string
+    }): Promise<string> =>
+      ipcRenderer.invoke('ai:suggestFollowUp', context),
+    suggestTags: (notes: string, existingTags: string[]): Promise<string[]> =>
+      ipcRenderer.invoke('ai:suggestTags', notes, existingTags),
+    draftEmail: (context: {
+      contactName: string
+      purpose: string
+      previousEmails?: string[]
+      tone?: 'formal' | 'friendly' | 'casual'
+    }): Promise<{ subject: string; body: string }> =>
+      ipcRenderer.invoke('ai:draftEmail', context),
+    meetingPrep: (context: {
+      contactName: string
+      company?: string
+      meetingPurpose?: string
+      recentNotes?: string[]
+    }): Promise<string> =>
+      ipcRenderer.invoke('ai:meetingPrep', context),
+    saveApiKey: (provider: 'openai' | 'anthropic', key: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('ai:saveApiKey', provider, key),
+    getApiKey: (provider: 'openai' | 'anthropic'): Promise<string | null> =>
+      ipcRenderer.invoke('ai:getApiKey', provider)
+  },
+
   // Enrichment
   enrichment: {
     enrichContact: (contactId: string): Promise<{
@@ -475,7 +526,17 @@ const api = {
     extractDomain: (email: string): Promise<string | null> =>
       ipcRenderer.invoke('enrichment:extractDomain', email),
     guessCompany: (domain: string): Promise<string> =>
-      ipcRenderer.invoke('enrichment:guessCompany', domain)
+      ipcRenderer.invoke('enrichment:guessCompany', domain),
+    getSuggestions: (contact: { emails: string; company: string | null }): Promise<string[]> =>
+      ipcRenderer.invoke('enrichment:getSuggestions', contact),
+    startBatch: (contactIds: string[], options?: { concurrency?: number }): Promise<{ jobId: string }> =>
+      ipcRenderer.invoke('enrichment:startBatch', contactIds, options),
+    pauseBatch: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('enrichment:pauseBatch'),
+    resumeBatch: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('enrichment:resumeBatch'),
+    cancelBatch: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('enrichment:cancelBatch')
   },
 
   // Dev Tools
@@ -495,7 +556,10 @@ const api = {
       'update:not-available',
       'update:progress',
       'update:downloaded',
-      'update:error'
+      'update:error',
+      'enrichment:batchProgress',
+      'enrichment:batchDone',
+      'enrichment:batchError'
     ]
     if (!allowedChannels.includes(channel)) {
       console.warn(`Channel ${channel} is not allowed`)

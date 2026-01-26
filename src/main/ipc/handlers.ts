@@ -724,6 +724,27 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
     return enrichmentService.guessCompanyFromDomain(domain)
   })
 
+  ipcMain.handle('enrichment:getSuggestions', (_, contact: { emails: string; company: string | null }) => {
+    return enrichmentService.getEnrichmentSuggestions(contact)
+  })
+
+  // Batch enrichment handlers
+  ipcMain.handle('enrichment:startBatch', async (_, contactIds: string[], options?: { concurrency?: number }) => {
+    return enrichmentService.startBatchEnrichment(contactIds, options || {})
+  })
+
+  ipcMain.handle('enrichment:pauseBatch', () => {
+    return enrichmentService.pauseBatchEnrichment()
+  })
+
+  ipcMain.handle('enrichment:resumeBatch', () => {
+    return enrichmentService.resumeBatchEnrichment()
+  })
+
+  ipcMain.handle('enrichment:cancelBatch', () => {
+    return enrichmentService.cancelBatchEnrichment()
+  })
+
   // === EMAIL TEMPLATES ===
   ipcMain.handle('templates:getAll', () => {
     return templatesRepo.getAllTemplates()
@@ -857,9 +878,18 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
     return aiService.getAIConfig()
   })
 
-  ipcMain.handle('ai:setConfig', (_, config: Partial<{ provider: string; localEndpoint: string; openaiApiKey: string; anthropicApiKey: string; model: string }>) => {
-    aiService.setAIConfig(config as Parameters<typeof aiService.setAIConfig>[0])
+  ipcMain.handle('ai:setConfig', async (_, config: Partial<{ provider: string; localEndpoint: string; openaiApiKey: string; anthropicApiKey: string; model: string }>) => {
+    await aiService.setAIConfig(config as Parameters<typeof aiService.setAIConfig>[0])
     return { success: true }
+  })
+
+  ipcMain.handle('ai:saveApiKey', async (_, provider: 'openai' | 'anthropic', key: string) => {
+    await aiService.saveApiKey(provider, key)
+    return { success: true }
+  })
+
+  ipcMain.handle('ai:getApiKey', async (_, provider: 'openai' | 'anthropic') => {
+    return await aiService.getApiKey(provider)
   })
 
   ipcMain.handle('ai:checkLocalAvailable', async () => {

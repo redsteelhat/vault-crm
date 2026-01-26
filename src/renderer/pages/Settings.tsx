@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, Database, Moon, Sun, Shield, HardDrive, Info, Lock, Clock, Eye, EyeOff, Key, RefreshCw, MessageCircle, Bug, FileText, Radio, Globe, Trash2, RotateCcw } from 'lucide-react'
+import { Download, Database, Moon, Sun, Shield, HardDrive, Info, Lock, Clock, Eye, EyeOff, Key, RefreshCw, MessageCircle, Bug, FileText, Radio, Globe, Trash2, RotateCcw, Sparkles } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useUIStore } from '@/stores/uiStore'
 import { useContactStore } from '@/stores/contactStore'
@@ -59,6 +60,9 @@ export function Settings() {
   const [backupFrequency, setBackupFrequency] = useState<'daily' | 'weekly'>('daily')
   const [maxBackups, setMaxBackups] = useState(10)
 
+  // Data Enrichment
+  const [enrichmentEnabled, setEnrichmentEnabled] = useState(true)
+
   // Dev Tools
   const [isSeedingData, setIsSeedingData] = useState(false)
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null)
@@ -70,6 +74,7 @@ export function Settings() {
     loadVaultSettings()
     loadUpdateSettings()
     loadBackupSettings()
+    loadEnrichmentSettings()
   }, [])
 
   const loadAppInfo = async () => {
@@ -173,6 +178,21 @@ export function Settings() {
     } catch {
       return dateStr
     }
+  }
+
+  const loadEnrichmentSettings = async () => {
+    try {
+      const enabled = await window.api.settings.get('enrichment_enabled')
+      setEnrichmentEnabled(enabled !== 'false') // Default to true
+    } catch (error) {
+      console.error('Failed to load enrichment settings:', error)
+    }
+  }
+
+  const handleEnrichmentToggle = async (enabled: boolean) => {
+    setEnrichmentEnabled(enabled)
+    await window.api.settings.set('enrichment_enabled', enabled.toString())
+    toast({ title: enabled ? 'Data enrichment enabled' : 'Data enrichment disabled' })
   }
 
   const handleCheckForUpdates = async () => {
@@ -584,6 +604,36 @@ export function Settings() {
                 <Button variant="outline" onClick={handleBackup}>
                   <HardDrive className="h-4 w-4 mr-2" /> {t('settings.backup')}
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Data Enrichment */}
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Data Enrichment
+              </CardTitle>
+              <CardDescription>Automatically enrich contact data with company logos and information</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium">Enable automatic enrichment</p>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically fetch company logos and favicons from email domains
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={enrichmentEnabled}
+                    onCheckedChange={handleEnrichmentToggle}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {enrichmentEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>
