@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
@@ -63,6 +64,18 @@ export function Settings() {
   // Data Enrichment
   const [enrichmentEnabled, setEnrichmentEnabled] = useState(true)
 
+  // License
+  const [licenseStatus, setLicenseStatus] = useState<{
+    isLicensed: boolean
+    plan: string
+    email: string | null
+    expiresAt: string | null
+    features: string[]
+  } | null>(null)
+  const [licenseKey, setLicenseKey] = useState('')
+  const [isActivating, setIsActivating] = useState(false)
+  const [isLicenseDialogOpen, setIsLicenseDialogOpen] = useState(false)
+
   // Dev Tools
   const [isSeedingData, setIsSeedingData] = useState(false)
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null)
@@ -75,7 +88,56 @@ export function Settings() {
     loadUpdateSettings()
     loadBackupSettings()
     loadEnrichmentSettings()
+    loadLicenseStatus()
   }, [])
+
+  const loadLicenseStatus = async () => {
+    try {
+      const status = await window.api.license.getStatus()
+      setLicenseStatus(status)
+    } catch (error) {
+      console.error('Failed to load license status:', error)
+    }
+  }
+
+  const handleActivateLicense = async () => {
+    if (!licenseKey.trim()) {
+      toast({ title: 'Please enter a license key', variant: 'destructive' })
+      return
+    }
+
+    setIsActivating(true)
+    try {
+      const result = await window.api.license.activate(licenseKey.trim())
+      if (result.success) {
+        toast({ title: 'License activated successfully', variant: 'success' })
+        setLicenseKey('')
+        setIsLicenseDialogOpen(false)
+        await loadLicenseStatus()
+      } else {
+        toast({ title: result.error || 'Failed to activate license', variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Failed to activate license', variant: 'destructive' })
+      console.error(error)
+    } finally {
+      setIsActivating(false)
+    }
+  }
+
+  const handleRemoveLicense = async () => {
+    if (!confirm('Are you sure you want to remove the license?')) {
+      return
+    }
+
+    try {
+      await window.api.license.remove()
+      toast({ title: 'License removed', variant: 'success' })
+      await loadLicenseStatus()
+    } catch (error) {
+      toast({ title: 'Failed to remove license', variant: 'destructive' })
+    }
+  }
 
   const loadAppInfo = async () => {
     try {
@@ -607,6 +669,104 @@ export function Settings() {
               </div>
             </CardContent>
           </Card>
+
+          {/* License */}
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5" />
+                License
+              </CardTitle>
+              <CardDescription>Activate your VaultCRM license</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {licenseStatus?.isLicensed ? (
+                <div className="space-y-3">
+                  <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-medium text-green-500">License Active</p>
+                      <Badge variant="default">Pro</Badge>
+                    </div>
+                    <div className="space-y-1 text-sm">
+                      <p>
+                        <span className="text-muted-foreground">Plan:</span>{' '}
+                        <span className="font-medium capitalize">{licenseStatus.plan}</span>
+                      </p>
+                      {licenseStatus.email && (
+                        <p>
+                          <span className="text-muted-foreground">Email:</span>{' '}
+                          <span className="font-medium">{licenseStatus.email}</span>
+                        </p>
+                      )}
+                      {licenseStatus.expiresAt ? (
+                        <p>
+                          <span className="text-muted-foreground">Expires:</span>{' '}
+                          <span className="font-medium">
+                            {new Date(licenseStatus.expiresAt).toLocaleDateString()}
+                          </span>
+                        </p>
+                      ) : (
+                        <p>
+                          <span className="text-muted-foreground">Type:</span>{' '}
+                          <span className="font-medium">Lifetime</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleRemoveLicense} className="w-full">
+                    Remove License
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="p-4 rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      You're using the free version. Activate a license to unlock all features.
+                    </p>
+                    <Button onClick={() => setIsLicenseDialogOpen(true)} className="w-full">
+                      Activate License
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* License Activation Dialog */}
+          <Dialog open={isLicenseDialogOpen} onOpenChange={setIsLicenseDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Activate License</DialogTitle>
+                <DialogDescription>
+                  Enter your license key to activate VaultCRM Pro
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="licenseKey">License Key</Label>
+                  <Textarea
+                    id="licenseKey"
+                    placeholder="Paste your license key here..."
+                    value={licenseKey}
+                    onChange={(e) => setLicenseKey(e.target.value)}
+                    rows={4}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    You received this key via email after purchase.
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsLicenseDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleActivateLicense} disabled={isActivating || !licenseKey.trim()}>
+                  {isActivating ? 'Activating...' : 'Activate'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Data Enrichment */}
           <Card className="border-none shadow-sm">

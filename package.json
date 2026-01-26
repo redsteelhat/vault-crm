@@ -16,6 +16,8 @@
     "build:linux": "electron-vite build && electron-builder --linux",
     "build:all": "electron-vite build && electron-builder --win --mac --linux",
     "build:beta": "electron-vite build && electron-builder --win --mac --linux -c electron-builder.beta.yml",
+    "release:beta": "npm run build:beta && echo 'Beta build complete. Use GitHub Actions to create release.'",
+    "release:stable": "npm run build && echo 'Stable build complete. Use GitHub Actions to create release.'",
     "lint": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "typecheck": "tsc --noEmit",

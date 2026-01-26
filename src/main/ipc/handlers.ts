@@ -29,6 +29,7 @@ import {
   deleteBackup 
 } from '../services/auto-backup'
 import { seedMockData } from '../database/seed-mock-data'
+import * as licenseService from '../services/license'
 import {
   getFeatureGates,
   getTierInfo,
@@ -918,6 +919,28 @@ export function registerAllHandlers(ipcMain: IpcMain): void {
 
   ipcMain.handle('ai:meetingPrep', async (_, context: { contactName: string; company?: string; meetingPurpose?: string; recentNotes?: string[] }) => {
     return aiService.generateMeetingPrep(context)
+  })
+
+  // === LICENSE ===
+  ipcMain.handle('license:getStatus', () => {
+    return licenseService.getLicenseStatus()
+  })
+
+  ipcMain.handle('license:activate', (_, licenseKey: string) => {
+    return licenseService.saveLicense(licenseKey)
+  })
+
+  ipcMain.handle('license:remove', () => {
+    licenseService.removeLicense()
+    return { success: true }
+  })
+
+  ipcMain.handle('license:getMachineId', () => {
+    return licenseService.getMachineId()
+  })
+
+  ipcMain.handle('license:hasFeature', (_, feature: string) => {
+    return licenseService.hasFeature(feature)
   })
 
   // Dev Tools - Mock Data Seeder

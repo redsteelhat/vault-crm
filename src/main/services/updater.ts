@@ -57,20 +57,34 @@ export function getUpdateSettings(): UpdateSettings {
   return loadSettings()
 }
 
+// GitHub repository configuration
+const GITHUB_OWNER = 'redsteelhat'
+const GITHUB_REPO = 'vault-crm'
+
 // Set update channel
 export function setUpdateChannel(channel: UpdateChannel): void {
   saveSettings({ channel })
   
-  // Update the feed URL based on channel
-  const feedUrl = channel === 'beta' 
-    ? 'https://beta.releases.vaultcrm.app'
-    : 'https://releases.vaultcrm.app'
+  // Use GitHub Releases for updates
+  // electron-updater will automatically fetch from GitHub Releases
+  // Format: https://github.com/OWNER/REPO/releases/latest/download/latest.yml
+  const feedUrl = channel === 'beta'
+    ? `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/latest-beta/latest.yml`
+    : `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest/download/latest.yml`
   
   autoUpdater.setFeedURL({
-    provider: 'generic',
-    url: feedUrl,
+    provider: 'github',
+    owner: GITHUB_OWNER,
+    repo: GITHUB_REPO,
     channel
   })
+  
+  // Fallback to generic provider if GitHub provider fails
+  // autoUpdater.setFeedURL({
+  //   provider: 'generic',
+  //   url: feedUrl,
+  //   channel
+  // })
 }
 
 // Set auto-check preference

@@ -539,6 +539,25 @@ const api = {
       ipcRenderer.invoke('enrichment:cancelBatch')
   },
 
+  // License
+  license: {
+    getStatus: (): Promise<{
+      isLicensed: boolean
+      plan: string
+      email: string | null
+      expiresAt: string | null
+      features: string[]
+    }> => ipcRenderer.invoke('license:getStatus'),
+    activate: (licenseKey: string): Promise<{ success: boolean; error?: string; license?: any }> =>
+      ipcRenderer.invoke('license:activate', licenseKey),
+    remove: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('license:remove'),
+    getMachineId: (): Promise<string> =>
+      ipcRenderer.invoke('license:getMachineId'),
+    hasFeature: (feature: string): Promise<boolean> =>
+      ipcRenderer.invoke('license:hasFeature', feature)
+  },
+
   // Dev Tools
   dev: {
     seedMockData: (): Promise<{ success: boolean; stats: Record<string, number> }> =>

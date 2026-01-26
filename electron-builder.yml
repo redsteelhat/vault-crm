@@ -96,10 +96,13 @@ asarUnpack:
   - '**/*.node'
   - '**/sql.js/**'
 
-# Auto-update (for future use)
+# Auto-update - GitHub Releases
 publish:
-  provider: generic
-  url: https://releases.vaultcrm.app
+  provider: github
+  owner: ${GITHUB_OWNER:-your-username}
+  repo: ${GITHUB_REPO:-vault-crm}
+  # Fallback to generic URL if GitHub provider not available
+  # url: https://releases.vaultcrm.app
 
 # Extra resources to include
 extraResources:
