@@ -1,0 +1,150 @@
+import { useEffect, useState, useRef } from "react";
+import { Link } from "react-router-dom";
+import { api, type Contact, type Reminder } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Users, Bell, UserPlus } from "lucide-react";
+
+async function showDueReminderNotifications(reminders: Reminder[]) {
+  try {
+    const { isPermissionGranted, requestPermission, sendNotification } = await import(
+      "@tauri-apps/plugin-notification"
+    );
+    let granted = await isPermissionGranted();
+    if (!granted) {
+      const permission = await requestPermission();
+      granted = permission === "granted";
+    }
+    if (!granted) return;
+    const now = new Date();
+    for (const r of reminders) {
+      const due = new Date(r.due_at);
+      if (due <= now) {
+        sendNotification({ title: "VaultCRM: Hatırlatıcı", body: r.title });
+      }
+    }
+  } catch {
+    // Not in Tauri or notification not available
+  }
+}
+
+function formatDate(s: string | null) {
+  if (!s) return "—";
+  try {
+    const d = new Date(s);
+    return d.toLocaleDateString("tr-TR", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return s;
+  }
+}
+
+export function Dashboard() {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const notifiedDue = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    Promise.all([api.contactList(), api.reminderList()])
+      .then(([c, r]) => {
+        setContacts(c);
+        setReminders(r);
+        const now = new Date();
+        const due = r.filter((x) => new Date(x.due_at) <= now);
+        const toNotify = due.filter((x) => !notifiedDue.current.has(x.id));
+        toNotify.forEach((x) => notifiedDue.current.add(x.id));
+        if (toNotify.length > 0) showDueReminderNotifications(toNotify);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const dueSoon = reminders
+    .filter((r) => {
+      const d = new Date(r.due_at);
+      const now = new Date();
+      const week = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return d >= now && d <= week;
+    })
+    .slice(0, 5);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <p className="text-muted-foreground">Yükleniyor…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <h1 className="mb-6 text-2xl font-semibold">Dashboard</h1>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Toplam kişi
+            </CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{contacts.length}</p>
+            <Button variant="link" className="mt-2 h-auto p-0" asChild>
+              <Link to="/contacts">Tümünü gör →</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Bekleyen hatırlatıcı
+            </CardTitle>
+            <Bell className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{reminders.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Hızlı işlem
+            </CardTitle>
+            <UserPlus className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link to="/import">CSV Import</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+      {dueSoon.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Bu hafta temas edilmesi gerekenler</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {dueSoon.map((r) => (
+                <li key={r.id} className="flex items-center justify-between rounded border p-2">
+                  <span>{r.title}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {formatDate(r.due_at)}
+                  </span>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={`/contacts/${r.contact_id}`}>Kişiye git</Link>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

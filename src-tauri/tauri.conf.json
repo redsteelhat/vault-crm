@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "VaultCRM",
+  "version": "0.1.0",
+  "identifier": "com.vaultcrm.app",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "VaultCRM",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    },
+    "longDescription": "Local-first personal CRM. Contacts, notes, reminders — no cloud, your data on device.",
+    "shortDescription": "Personal CRM — local, private",
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "category": "Productivity",
+    "copyright": "",
+    "licenseFile": null
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}

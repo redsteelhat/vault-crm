@@ -1,0 +1,32 @@
+[package]
+name = "vault-crm"
+version = "0.1.0"
+description = "Local-first personal CRM — no cloud, your data on device"
+authors = ["VaultCRM"]
+edition = "2021"
+rust-version = "1.70"
+
+[lib]
+name = "vault_crm_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vault-crm"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-notification = "2"
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

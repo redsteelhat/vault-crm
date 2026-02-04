@@ -1,23 +1,18 @@
 # Dependencies
 node_modules/
 
-# Build outputs
-out/
+# Build
 dist/
+dist-ssr/
+*.local
 
-# Database
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
+# Tauri
+src-tauri/target/
+src-tauri/WixTools/
 
-# Logs
-*.log
-npm-debug.log*
-
-# Editor
-.vscode/
+# IDE
 .idea/
+.vscode/
 *.swp
 *.swo
 
@@ -25,13 +20,12 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Environment
+# Env
 .env
 .env.local
 .env.*.local
 
-# Electron builder
-release/
-
-# License keys (private)
-.keys/
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
