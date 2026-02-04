@@ -2,15 +2,47 @@
 // All data stays local; no cloud calls.
 
 use chrono::Utc;
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
-use tauri::{AppHandle, State};
+use tauri::State;
 use uuid::Uuid;
 
 use crate::db::DbState;
 
-// ---- Contact ----
+// ---- Company (A1.5 şirket kartı) ----
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Company {
+    pub id: String,
+    pub name: String,
+    pub domain: Option<String>,
+    pub industry: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCompanyInput {
+    pub name: String,
+    pub domain: Option<String>,
+    pub industry: Option<String>,
+    pub notes: Option<String>,
+}
+
+fn row_to_company(row: &Row) -> rusqlite::Result<Company> {
+    Ok(Company {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        domain: row.get(2)?,
+        industry: row.get(3)?,
+        notes: row.get(4)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+    })
+}
+
+// ---- Contact (A1 kişi kartı) ----
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Contact {
@@ -19,11 +51,15 @@ pub struct Contact {
     pub last_name: String,
     pub title: Option<String>,
     pub company: Option<String>,
+    pub company_id: Option<String>,
     pub city: Option<String>,
     pub country: Option<String>,
     pub email: Option<String>,
+    pub email_secondary: Option<String>,
     pub phone: Option<String>,
+    pub phone_secondary: Option<String>,
     pub linkedin_url: Option<String>,
+    pub twitter_url: Option<String>,
     pub website: Option<String>,
     pub notes: Option<String>,
     pub last_touched_at: Option<String>,
@@ -38,45 +74,134 @@ pub struct CreateContactInput {
     pub last_name: String,
     pub title: Option<String>,
     pub company: Option<String>,
+    pub company_id: Option<String>,
     pub city: Option<String>,
     pub country: Option<String>,
     pub email: Option<String>,
+    pub email_secondary: Option<String>,
     pub phone: Option<String>,
+    pub phone_secondary: Option<String>,
     pub linkedin_url: Option<String>,
+    pub twitter_url: Option<String>,
     pub website: Option<String>,
     pub notes: Option<String>,
+}
+
+fn row_to_contact(row: &Row) -> rusqlite::Result<Contact> {
+    Ok(Contact {
+        id: row.get(0)?,
+        first_name: row.get(1)?,
+        last_name: row.get(2)?,
+        title: row.get(3)?,
+        company: row.get(4)?,
+        company_id: row.get(5)?,
+        city: row.get(6)?,
+        country: row.get(7)?,
+        email: row.get(8)?,
+        email_secondary: row.get(9)?,
+        phone: row.get(10)?,
+        phone_secondary: row.get(11)?,
+        linkedin_url: row.get(12)?,
+        twitter_url: row.get(13)?,
+        website: row.get(14)?,
+        notes: row.get(15)?,
+        last_touched_at: row.get(16)?,
+        next_touch_at: row.get(17)?,
+        created_at: row.get(18)?,
+        updated_at: row.get(19)?,
+    })
+}
+
+fn is_valid_email(v: &Option<String>) -> bool {
+    let Some(v) = v else { return true; };
+    let v = v.trim();
+    if v.is_empty() {
+        return true;
+    }
+    let parts: Vec<&str> = v.split('@').collect();
+    if parts.len() != 2 {
+        return false;
+    }
+    parts[1].contains('.')
+}
+
+fn is_valid_phone(v: &Option<String>) -> bool {
+    let Some(v) = v else { return true; };
+    let v = v.trim();
+    if v.is_empty() {
+        return true;
+    }
+    if !v.chars().all(|c| c.is_ascii_digit() || "+()- .".contains(c)) {
+        return false;
+    }
+    let digits = v.chars().filter(|c| c.is_ascii_digit()).count();
+    digits >= 6
+}
+
+fn resolve_company_name(
+    conn: &rusqlite::Connection,
+    company_id: &Option<String>,
+    company: &mut Option<String>,
+) {
+    if let Some(c) = company.as_ref() {
+        if !c.trim().is_empty() {
+            return;
+        }
+    }
+    let Some(id) = company_id else { return; };
+    if let Ok(Some(name)) = conn
+        .query_row("SELECT name FROM companies WHERE id = ?1", params![id], |r| r.get::<_, String>(0))
+        .optional()
+    {
+        *company = Some(name);
+    }
+}
+
+fn normalize_domain(domain: &Option<String>) -> Option<String> {
+    let Some(domain) = domain else { return None; };
+    let mut d = domain.trim();
+    if d.is_empty() {
+        return None;
+    }
+    if let Some(rest) = d.strip_prefix("https://") {
+        d = rest;
+    } else if let Some(rest) = d.strip_prefix("http://") {
+        d = rest;
+    }
+    let d = d.split('/').next().unwrap_or("").trim();
+    if d.is_empty() {
+        None
+    } else {
+        Some(d.to_string())
+    }
+}
+
+fn value_contains_option(value: &Option<String>, target: &str) -> bool {
+    let Some(value) = value else { return false; };
+    let v = value.trim();
+    if v.is_empty() {
+        return false;
+    }
+    if let Ok(arr) = serde_json::from_str::<Vec<String>>(v) {
+        return arr.iter().any(|s| s == target);
+    }
+    v.split(',').map(|s| s.trim()).any(|s| s == target)
 }
 
 #[tauri::command]
 pub fn contact_list(db: State<DbState>) -> Result<Vec<Contact>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let conn = conn.as_ref().ok_or("DB not initialized")?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, first_name, last_name, title, company, city, country, email, phone, linkedin_url, website, notes, last_touched_at, next_touch_at, created_at, updated_at FROM contacts ORDER BY updated_at DESC",
-        )
-        .map_err(|e| e.to_string())?;
+    let sql = "SELECT c.id, c.first_name, c.last_name, c.title,
+        COALESCE(co.name, c.company), c.company_id, c.city, c.country,
+        c.email, c.email_secondary, c.phone, c.phone_secondary,
+        c.linkedin_url, c.twitter_url, c.website, c.notes,
+        c.last_touched_at, c.next_touch_at, c.created_at, c.updated_at
+        FROM contacts c LEFT JOIN companies co ON c.company_id = co.id
+        ORDER BY c.updated_at DESC";
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| {
-            Ok(Contact {
-                id: row.get(0)?,
-                first_name: row.get(1)?,
-                last_name: row.get(2)?,
-                title: row.get(3)?,
-                company: row.get(4)?,
-                city: row.get(5)?,
-                country: row.get(6)?,
-                email: row.get(7)?,
-                phone: row.get(8)?,
-                linkedin_url: row.get(9)?,
-                website: row.get(10)?,
-                notes: row.get(11)?,
-                last_touched_at: row.get(12)?,
-                next_touch_at: row.get(13)?,
-                created_at: row.get(14)?,
-                updated_at: row.get(15)?,
-            })
-        })
+        .query_map([], row_to_contact)
         .map_err(|e| e.to_string())?;
     let list: Vec<Contact> = rows.filter_map(|r| r.ok()).collect();
     Ok(list)
@@ -86,31 +211,17 @@ pub fn contact_list(db: State<DbState>) -> Result<Vec<Contact>, String> {
 pub fn contact_get(db: State<DbState>, id: String) -> Result<Option<Contact>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let conn = conn.as_ref().ok_or("DB not initialized")?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, first_name, last_name, title, company, city, country, email, phone, linkedin_url, website, notes, last_touched_at, next_touch_at, created_at, updated_at FROM contacts WHERE id = ?1",
-        )
-        .map_err(|e| e.to_string())?;
+    let sql = "SELECT c.id, c.first_name, c.last_name, c.title,
+        COALESCE(co.name, c.company), c.company_id, c.city, c.country,
+        c.email, c.email_secondary, c.phone, c.phone_secondary,
+        c.linkedin_url, c.twitter_url, c.website, c.notes,
+        c.last_touched_at, c.next_touch_at, c.created_at, c.updated_at
+        FROM contacts c LEFT JOIN companies co ON c.company_id = co.id WHERE c.id = ?1";
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
     if let Some(row) = rows.next().map_err(|e| e.to_string())? {
-        return Ok(Some(Contact {
-            id: row.get(0)?,
-            first_name: row.get(1)?,
-            last_name: row.get(2)?,
-            title: row.get(3)?,
-            company: row.get(4)?,
-            city: row.get(5)?,
-            country: row.get(6)?,
-            email: row.get(7)?,
-            phone: row.get(8)?,
-            linkedin_url: row.get(9)?,
-            website: row.get(10)?,
-            notes: row.get(11)?,
-            last_touched_at: row.get(12)?,
-            next_touch_at: row.get(13)?,
-            created_at: row.get(14)?,
-            updated_at: row.get(15)?,
-        }));
+        let contact = row_to_contact(&row).map_err(|e| e.to_string())?;
+        return Ok(Some(contact));
     }
     Ok(None)
 }
@@ -119,28 +230,43 @@ pub fn contact_get(db: State<DbState>, id: String) -> Result<Option<Contact>, St
 pub fn contact_create(db: State<DbState>, input: CreateContactInput) -> Result<Contact, String> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let conn = conn.as_ref().ok_or("DB not initialized")?;
-    conn.execute(
-        "INSERT INTO contacts (id, first_name, last_name, title, company, city, country, email, phone, linkedin_url, website, notes, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-        params![
-            id,
-            input.first_name,
-            input.last_name,
-            input.title,
-            input.company,
-            input.city,
-            input.country,
-            input.email,
-            input.phone,
-            input.linkedin_url,
-            input.website,
-            input.notes,
-            now,
-            now,
-        ],
-    )
-    .map_err(|e| e.to_string())?;
+    if !is_valid_email(&input.email) || !is_valid_email(&input.email_secondary) {
+        return Err("Geçersiz email formatı".to_string());
+    }
+    if !is_valid_phone(&input.phone) || !is_valid_phone(&input.phone_secondary) {
+        return Err("Geçersiz telefon formatı".to_string());
+    }
+    let mut company = input.company.clone();
+    let company_id = input.company_id.clone();
+    {
+        let conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = conn_guard.as_ref().ok_or("DB not initialized")?;
+        resolve_company_name(conn, &company_id, &mut company);
+        conn.execute(
+            "INSERT INTO contacts (id, first_name, last_name, title, company, company_id, city, country, email, email_secondary, phone, phone_secondary, linkedin_url, twitter_url, website, notes, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            params![
+                id,
+                input.first_name,
+                input.last_name,
+                input.title,
+                company,
+                company_id,
+                input.city,
+                input.country,
+                input.email,
+                input.email_secondary,
+                input.phone,
+                input.phone_secondary,
+                input.linkedin_url,
+                input.twitter_url,
+                input.website,
+                input.notes,
+                now,
+                now,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
     contact_get(db, id)?
         .ok_or_else(|| "Contact not found after insert".to_string())
 }
@@ -152,27 +278,42 @@ pub fn contact_update(
     input: CreateContactInput,
 ) -> Result<Contact, String> {
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let conn = conn.as_ref().ok_or("DB not initialized")?;
-    conn.execute(
-        "UPDATE contacts SET first_name=?1, last_name=?2, title=?3, company=?4, city=?5, country=?6, email=?7, phone=?8, linkedin_url=?9, website=?10, notes=?11, updated_at=?12 WHERE id=?13",
-        params![
-            input.first_name,
-            input.last_name,
-            input.title,
-            input.company,
-            input.city,
-            input.country,
-            input.email,
-            input.phone,
-            input.linkedin_url,
-            input.website,
-            input.notes,
-            now,
-            id,
-        ],
-    )
-    .map_err(|e| e.to_string())?;
+    if !is_valid_email(&input.email) || !is_valid_email(&input.email_secondary) {
+        return Err("Geçersiz email formatı".to_string());
+    }
+    if !is_valid_phone(&input.phone) || !is_valid_phone(&input.phone_secondary) {
+        return Err("Geçersiz telefon formatı".to_string());
+    }
+    let mut company = input.company.clone();
+    let company_id = input.company_id.clone();
+    {
+        let conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = conn_guard.as_ref().ok_or("DB not initialized")?;
+        resolve_company_name(conn, &company_id, &mut company);
+        conn.execute(
+            "UPDATE contacts SET first_name=?1, last_name=?2, title=?3, company=?4, company_id=?5, city=?6, country=?7, email=?8, email_secondary=?9, phone=?10, phone_secondary=?11, linkedin_url=?12, twitter_url=?13, website=?14, notes=?15, updated_at=?16 WHERE id=?17",
+            params![
+                input.first_name,
+                input.last_name,
+                input.title,
+                company,
+                company_id,
+                input.city,
+                input.country,
+                input.email,
+                input.email_secondary,
+                input.phone,
+                input.phone_secondary,
+                input.linkedin_url,
+                input.twitter_url,
+                input.website,
+                input.notes,
+                now,
+                id,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
     contact_get(db, id)?.ok_or_else(|| "Contact not found".to_string())
 }
 
@@ -182,6 +323,270 @@ pub fn contact_delete(db: State<DbState>, id: String) -> Result<(), String> {
     let conn = conn.as_ref().ok_or("DB not initialized")?;
     conn.execute("DELETE FROM contacts WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn company_list(db: State<DbState>) -> Result<Vec<Company>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, domain, industry, notes, created_at, updated_at FROM companies ORDER BY name")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], row_to_company)
+        .map_err(|e| e.to_string())?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[tauri::command]
+pub fn company_get(db: State<DbState>, id: String) -> Result<Option<Company>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, domain, industry, notes, created_at, updated_at FROM companies WHERE id = ?1")
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
+    if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let company = row_to_company(&row).map_err(|e| e.to_string())?;
+        return Ok(Some(company));
+    }
+    Ok(None)
+}
+
+#[tauri::command]
+pub fn company_create(db: State<DbState>, input: CreateCompanyInput) -> Result<Company, String> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let domain = normalize_domain(&input.domain);
+    {
+        let conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = conn_guard.as_ref().ok_or("DB not initialized")?;
+        conn.execute(
+            "INSERT INTO companies (id, name, domain, industry, notes, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![id, input.name, domain, input.industry, input.notes, now, now],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    company_get(db, id)?.ok_or_else(|| "Company not found after insert".to_string())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateCompanyInput {
+    pub name: String,
+    pub domain: Option<String>,
+    pub industry: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[tauri::command]
+pub fn company_update(
+    db: State<DbState>,
+    id: String,
+    input: UpdateCompanyInput,
+) -> Result<Company, String> {
+    let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let domain = normalize_domain(&input.domain);
+    {
+        let conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = conn_guard.as_ref().ok_or("DB not initialized")?;
+        conn.execute(
+            "UPDATE companies SET name=?1, domain=?2, industry=?3, notes=?4, updated_at=?5 WHERE id=?6",
+            params![input.name, domain, input.industry, input.notes, now, id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    company_get(db, id)?.ok_or_else(|| "Company not found".to_string())
+}
+
+#[tauri::command]
+pub fn contact_list_by_company(db: State<DbState>, company_id: String) -> Result<Vec<Contact>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let sql = "SELECT c.id, c.first_name, c.last_name, c.title,
+        COALESCE(co.name, c.company), c.company_id, c.city, c.country,
+        c.email, c.email_secondary, c.phone, c.phone_secondary,
+        c.linkedin_url, c.twitter_url, c.website, c.notes,
+        c.last_touched_at, c.next_touch_at, c.created_at, c.updated_at
+        FROM contacts c LEFT JOIN companies co ON c.company_id = co.id
+        WHERE c.company_id = ?1 ORDER BY c.updated_at DESC";
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![company_id], row_to_contact)
+        .map_err(|e| e.to_string())?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+// ---- Custom fields (A3) ----
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CustomField {
+    pub id: String,
+    pub name: String,
+    pub kind: String,
+    pub options: Option<String>,
+    pub sort_order: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CustomValue {
+    pub field_id: String,
+    pub field_name: String,
+    pub kind: String,
+    pub options: Option<String>,
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCustomFieldInput {
+    pub name: String,
+    pub kind: String,
+    pub options: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CustomValueInput {
+    pub field_id: String,
+    pub value: Option<String>,
+}
+
+#[tauri::command]
+pub fn custom_field_list(db: State<DbState>) -> Result<Vec<CustomField>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, kind, options, sort_order, created_at FROM custom_fields ORDER BY sort_order, name")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(CustomField {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                kind: row.get(2)?,
+                options: row.get(3)?,
+                sort_order: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[tauri::command]
+pub fn custom_field_create(db: State<DbState>, input: CreateCustomFieldInput) -> Result<CustomField, String> {
+    let id = format!("cf_{}", Uuid::new_v4().to_string().replace('-', "").chars().take(12).collect::<String>());
+    let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let kind = if input.kind.is_empty() { "text" } else { input.kind.as_str() };
+    conn.execute(
+        "INSERT INTO custom_fields (id, name, kind, options, sort_order, created_at) VALUES (?1, ?2, ?3, ?4, 999, ?5)",
+        params![id, input.name, kind, input.options, now],
+    )
+    .map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, kind, options, sort_order, created_at FROM custom_fields WHERE id = ?1")
+        .map_err(|e| e.to_string())?;
+    let row = stmt
+        .query_row(params![id], |row| {
+            Ok(CustomField {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                kind: row.get(2)?,
+                options: row.get(3)?,
+                sort_order: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(row)
+}
+
+#[tauri::command]
+pub fn contact_custom_values_get(db: State<DbState>, contact_id: String) -> Result<Vec<CustomValue>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let sql = "SELECT f.id, f.name, f.kind, f.options, v.value
+        FROM custom_fields f
+        LEFT JOIN contact_custom_values v ON v.field_id = f.id AND v.contact_id = ?1
+        ORDER BY f.sort_order, f.name";
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![contact_id], |row| {
+            Ok(CustomValue {
+                field_id: row.get(0)?,
+                field_name: row.get(1)?,
+                kind: row.get(2)?,
+                options: row.get(3)?,
+                value: row.get(4)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[tauri::command]
+pub fn contact_custom_values_set(
+    db: State<DbState>,
+    contact_id: String,
+    values: Vec<CustomValueInput>,
+) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    for v in values {
+        conn.execute(
+            "INSERT INTO contact_custom_values (contact_id, field_id, value) VALUES (?1, ?2, ?3)
+             ON CONFLICT(contact_id, field_id) DO UPDATE SET value = excluded.value",
+            params![contact_id, v.field_id, v.value],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn contact_ids_by_custom_value(
+    db: State<DbState>,
+    field_id: String,
+    value: String,
+) -> Result<Vec<String>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let kind: Option<String> = conn
+        .query_row(
+            "SELECT kind FROM custom_fields WHERE id = ?1",
+            params![field_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if kind.as_deref() == Some("multi_select") {
+        let mut stmt = conn
+            .prepare("SELECT contact_id, value FROM contact_custom_values WHERE field_id = ?1")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![field_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+            })
+            .map_err(|e| e.to_string())?;
+        let mut ids = Vec::new();
+        for row in rows {
+            if let Ok((contact_id, v)) = row {
+                if value_contains_option(&v, &value) {
+                    ids.push(contact_id);
+                }
+            }
+        }
+        Ok(ids)
+    } else {
+        let mut stmt = conn
+            .prepare("SELECT contact_id FROM contact_custom_values WHERE field_id = ?1 AND value = ?2")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![field_id, value], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
 }
 
 // ---- Notes ----
@@ -462,11 +867,86 @@ pub fn search_contacts(db: State<DbState>, q: String) -> Result<Vec<String>, Str
     Ok(ids)
 }
 
-// Use optional() - need to add that. Actually rusqlite QueryRow has optional(). Let me check - it's query_row().optional() in newer rusqlite. Simpler: just get id from rowid. Actually we have content='contacts' so rowid of contacts_fts matches rowid of contacts. So SELECT id FROM contacts WHERE rowid = ? works. But we're iterating and doing N queries. Better: SELECT c.id FROM contacts c JOIN contacts_fts f ON c.rowid = f.rowid WHERE f.contacts_fts MATCH ?1. Let me fix.
-// FTS5 content table: content_rowid is 'rowid', so contacts_fts.rowid = contacts.rowid. So we can do:
-// SELECT id FROM contacts WHERE rowid IN (SELECT rowid FROM contacts_fts WHERE contacts_fts MATCH ?1)
-// One query.
-</think>
-FTS sorgusunu düzeltiyorum ve lib.rs'i yazıyorum.
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
-StrReplace
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    #[test]
+    fn validates_email_format() {
+        assert!(is_valid_email(&None));
+        assert!(is_valid_email(&Some("".to_string())));
+        assert!(is_valid_email(&Some("test@example.com".to_string())));
+        assert!(!is_valid_email(&Some("bad-email".to_string())));
+        assert!(!is_valid_email(&Some("no-at.example.com".to_string())));
+        assert!(!is_valid_email(&Some("a@b".to_string())));
+    }
+
+    #[test]
+    fn validates_phone_format() {
+        assert!(is_valid_phone(&None));
+        assert!(is_valid_phone(&Some("".to_string())));
+        assert!(is_valid_phone(&Some("+90 532 123 45 67".to_string())));
+        assert!(is_valid_phone(&Some("(212) 555-1212".to_string())));
+        assert!(!is_valid_phone(&Some("abc".to_string())));
+        assert!(!is_valid_phone(&Some("12".to_string())));
+    }
+
+    #[test]
+    fn resolves_company_name_from_id() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        conn.execute(
+            "CREATE TABLE companies (id TEXT PRIMARY KEY, name TEXT NOT NULL)",
+            [],
+        )
+        .expect("create companies table");
+        conn.execute(
+            "INSERT INTO companies (id, name) VALUES (?1, ?2)",
+            params!["c1", "Acme"],
+        )
+        .expect("insert company");
+
+        let mut company = None;
+        let company_id = Some("c1".to_string());
+        resolve_company_name(&conn, &company_id, &mut company);
+        assert_eq!(company, Some("Acme".to_string()));
+    }
+
+    #[test]
+    fn does_not_override_existing_company_name() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        conn.execute(
+            "CREATE TABLE companies (id TEXT PRIMARY KEY, name TEXT NOT NULL)",
+            [],
+        )
+        .expect("create companies table");
+        conn.execute(
+            "INSERT INTO companies (id, name) VALUES (?1, ?2)",
+            params!["c1", "Acme"],
+        )
+        .expect("insert company");
+
+        let mut company = Some("Manual Co".to_string());
+        let company_id = Some("c1".to_string());
+        resolve_company_name(&conn, &company_id, &mut company);
+        assert_eq!(company, Some("Manual Co".to_string()));
+    }
+
+    #[test]
+    fn normalizes_domain_values() {
+        assert_eq!(normalize_domain(&None), None);
+        assert_eq!(normalize_domain(&Some("".to_string())), None);
+        assert_eq!(
+            normalize_domain(&Some(" https://example.com/path ".to_string())),
+            Some("example.com".to_string())
+        );
+        assert_eq!(
+            normalize_domain(&Some("http://example.com".to_string())),
+            Some("example.com".to_string())
+        );
+        assert_eq!(
+            normalize_domain(&Some("example.com".to_string())),
+            Some("example.com".to_string())
+        );
+    }
+}

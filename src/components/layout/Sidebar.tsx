@@ -3,13 +3,17 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Users,
+  Building2,
   Upload,
+  Settings,
 } from "lucide-react";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/contacts", label: "Kişiler", icon: Users },
+  { to: "/companies", label: "Şirketler", icon: Building2 },
   { to: "/import", label: "Import", icon: Upload },
+  { to: "/settings", label: "Ayarlar", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -26,7 +30,7 @@ export function Sidebar() {
             to={to}
             className={cn(
               "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
-              location.pathname === to
+              location.pathname === to || (to !== "/" && location.pathname.startsWith(to + "/"))
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground"
             )}

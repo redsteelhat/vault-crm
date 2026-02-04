@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { api, type Contact, type Reminder } from "@/lib/api";
+import { api, type Contact, type Reminder, type CustomField } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, Bell, UserPlus } from "lucide-react";
@@ -42,15 +42,25 @@ function formatDate(s: string | null) {
   }
 }
 
+function parseOptions(options: string | null): string[] {
+  if (!options) return [];
+  try {
+    return JSON.parse(options) as string[];
+  } catch {
+    return [];
+  }
+}
+
 export function Dashboard() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stageStats, setStageStats] = useState<{ label: string; count: number }[]>([]);
 
   const notifiedDue = useRef<Set<string>>(new Set());
   useEffect(() => {
-    Promise.all([api.contactList(), api.reminderList()])
-      .then(([c, r]) => {
+    Promise.all([api.contactList(), api.reminderList(), api.customFieldList()])
+      .then(async ([c, r, fields]) => {
         setContacts(c);
         setReminders(r);
         const now = new Date();
@@ -58,6 +68,22 @@ export function Dashboard() {
         const toNotify = due.filter((x) => !notifiedDue.current.has(x.id));
         toNotify.forEach((x) => notifiedDue.current.add(x.id));
         if (toNotify.length > 0) showDueReminderNotifications(toNotify);
+
+        const stageField = (fields ?? []).find(
+          (f: CustomField) => f.id === "cf_stage" || f.name === "Stage"
+        );
+        if (stageField) {
+          const options = parseOptions(stageField.options);
+          const counts = await Promise.all(
+            options.map(async (label) => {
+              const ids = await api.contactIdsByCustomValue(stageField.id, label);
+              return { label, count: ids.length };
+            })
+          );
+          setStageStats(counts);
+        } else {
+          setStageStats([]);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -139,6 +165,23 @@ export function Dashboard() {
                   <Button variant="outline" size="sm" asChild>
                     <Link to={`/contacts/${r.contact_id}`}>Kişiye git</Link>
                   </Button>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+      {stageStats.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Stage dağılımı (A3)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              {stageStats.map((s) => (
+                <li key={s.label} className="flex items-center justify-between">
+                  <span>{s.label}</span>
+                  <span className="font-medium">{s.count}</span>
                 </li>
               ))}
             </ul>

@@ -2,8 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+   VaultLink Design System — Foundations (FND)
+   - 8pt grid, semantic colors, typography, radius, elevation
+   - Platform tuning: Windows (body 500, caption 13px, lh 22/24) vs macOS (body 400, caption 12px, lh 20/24)
+   --------------------------------------------------------------------------- */
+
 @layer base {
   :root {
+    /* FND / Color / Light */
     --background: 220 20% 97%;
     --foreground: 220 20% 10%;
     --card: 0 0% 100%;
@@ -20,7 +27,18 @@
     --border: 220 15% 88%;
     --input: 220 15% 88%;
     --ring: 220 70% 45%;
+    /* FND / Color / Semantic */
+    --success: 142 76% 36%;
+    --warn: 38 92% 50%;
+    --error: 0 84% 60%;
+    --info: 217 91% 60%;
+    /* FND / Radius (4 seviye) */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
   }
+
   .dark {
     --background: 220 20% 9%;
     --foreground: 220 15% 95%;
@@ -38,11 +56,25 @@
     --border: 220 15% 22%;
     --input: 220 15% 22%;
     --ring: 220 70% 55%;
+    /* Semantic dark */
+    --success: 142 70% 45%;
+    --warn: 38 92% 55%;
+    --error: 0 62% 50%;
+    --info: 217 91% 65%;
   }
+
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground antialiased;
+    /* Platform: Windows body 500, macOS 400 — Inter'de 450 yok; varsayılan 400, Windows override için .platform-windows body font-medium */
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Focus ring — P0 Accessibility: her interactive elementte görünür */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }

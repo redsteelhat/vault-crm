@@ -10,19 +10,19 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### A1 — Kişi kartı (Contact)
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| A1.1 | Temel alanlar | İsim (first/last), rol/unvan, şirket, lokasyon (şehir/ülke) | ☐ |
-| A1.2 | İletişim | Email (birincil + ek), telefon (birincil + ek), doğrulama (format) | ☐ |
-| A1.3 | Sosyal linkler | LinkedIn URL, Twitter/X, web sitesi (serbest URL alanları) | ☐ |
-| A1.4 | Notlar alanı | Kişiye özel notlar (Markdown); timeline ile ilişkilendirme | ☐ |
-| A1.5 | Şirket ilişkisi | Kişi ↔ şirket kartı bağlantısı (many-to-one) | ☐ |
+| A1.1 | Temel alanlar | İsim (first/last), rol/unvan, şirket, lokasyon (şehir/ülke) | ☑ |
+| A1.2 | İletişim | Email (birincil + ek), telefon (birincil + ek), doğrulama (format) | ☑ |
+| A1.3 | Sosyal linkler | LinkedIn URL, Twitter/X, web sitesi (serbest URL alanları) | ☑ |
+| A1.4 | Notlar alanı | Kişiye özel notlar (Markdown); timeline ile ilişkilendirme | ☑ |
+| A1.5 | Şirket ilişkisi | Kişi ↔ şirket kartı bağlantısı (many-to-one) | ☑ |
 
 ### A2 — Şirket/organizasyon kartı (Company)
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| A2.1 | Temel alanlar | İsim, domain (örn. company.com), sektör/industry | ☐ |
-| A2.2 | Notlar | Şirket bazlı notlar (Markdown) | ☐ |
-| A2.3 | Kişi listesi | Bu şirkete bağlı kişiler; karttan tek tıkla kişiye geçiş | ☐ |
-| A2.4 | Domain’den otomatik | (Opsiyonel) Domain girilince favicon/logo önerisi — tamamen local | ☐ |
+| A2.1 | Temel alanlar | İsim, domain (örn. company.com), sektör/industry | ☑ |
+| A2.2 | Notlar | Şirket bazlı notlar (Markdown) | ☑ |
+| A2.3 | Kişi listesi | Bu şirkete bağlı kişiler; karttan tek tıkla kişiye geçiş | ☑ |
+| A2.4 | Domain’den otomatik | (Opsiyonel) Domain girilince favicon/logo önerisi — tamamen local | ☑ |
 
 ### A3 — Özel alanlar (Custom fields)
 | # | Özellik | Detay / Kriter | Todo |
@@ -111,7 +111,7 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
 | D2.1 | “Next action required” inbox | Tüm kişilerin bugün/bu hafta next action’ları tek listede | ☐ |
-| D2.2 | Günlük/haftalık review ekranı | “Bugün yapılacaklar”, “Bu hafta pipeline review”; tamamen local | ☐ |
+| D2.2 | Günlük/haftalık review ekranı | “Bugün yapılacaklar”, “Bu hafta pipeline review”; tamamen local | ☑ |
 | D2.3 | Tamamlandı işaretleme | Action tamamlandı → “Last touched” güncellenir, next action temizlenir veya yeni tarih | ☐ |
 
 ---

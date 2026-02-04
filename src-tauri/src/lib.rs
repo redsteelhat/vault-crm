@@ -3,7 +3,6 @@ mod db;
 
 use db::DbState;
 use tauri::Manager;
-use tauri_plugin_notification::NotificationExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,6 +20,16 @@ pub fn run() {
             commands::contact_create,
             commands::contact_update,
             commands::contact_delete,
+            commands::company_list,
+            commands::company_get,
+            commands::company_create,
+            commands::company_update,
+            commands::contact_list_by_company,
+            commands::custom_field_list,
+            commands::custom_field_create,
+            commands::contact_custom_values_get,
+            commands::contact_custom_values_set,
+            commands::contact_ids_by_custom_value,
             commands::note_list,
             commands::note_create,
             commands::reminder_list,
