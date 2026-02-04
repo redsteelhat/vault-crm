@@ -6,12 +6,14 @@ import {
   Building2,
   Upload,
   Settings,
+  GitMerge,
 } from "lucide-react";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/contacts", label: "Kişiler", icon: Users },
   { to: "/companies", label: "Şirketler", icon: Building2 },
+  { to: "/dedup", label: "Duplikatlar", icon: GitMerge },
   { to: "/import", label: "Import", icon: Upload },
   { to: "/settings", label: "Ayarlar", icon: Settings },
 ];

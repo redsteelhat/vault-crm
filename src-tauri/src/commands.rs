@@ -4,6 +4,7 @@
 use chrono::Utc;
 use rusqlite::{params, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tauri::State;
 use uuid::Uuid;
 
@@ -44,7 +45,7 @@ fn row_to_company(row: &Row) -> rusqlite::Result<Company> {
 
 // ---- Contact (A1 kişi kartı) ----
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Contact {
     pub id: String,
     pub first_name: String,
@@ -85,6 +86,21 @@ pub struct CreateContactInput {
     pub twitter_url: Option<String>,
     pub website: Option<String>,
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DedupCandidate {
+    pub a: Contact,
+    pub b: Contact,
+    pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MergeContactInput {
+    pub primary_id: String,
+    pub secondary_id: String,
+    pub merged: CreateContactInput,
+    pub custom_values: Option<Vec<CustomValueInput>>,
 }
 
 fn row_to_contact(row: &Row) -> rusqlite::Result<Contact> {
@@ -176,6 +192,80 @@ fn normalize_domain(domain: &Option<String>) -> Option<String> {
     }
 }
 
+fn normalize_email(value: &Option<String>) -> Option<String> {
+    let Some(v) = value else { return None; };
+    let v = v.trim().to_lowercase();
+    if v.is_empty() {
+        None
+    } else {
+        Some(v)
+    }
+}
+
+fn normalize_phone(value: &Option<String>) -> Option<String> {
+    let Some(v) = value else { return None; };
+    let digits: String = v.chars().filter(|c| c.is_ascii_digit()).collect();
+    if digits.len() < 6 {
+        None
+    } else {
+        Some(digits)
+    }
+}
+
+fn normalize_name(first: &str, last: &str) -> String {
+    let mut s = String::with_capacity(first.len() + last.len() + 1);
+    s.push_str(first);
+    s.push(' ');
+    s.push_str(last);
+    s.chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect::<String>()
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join(" ")
+}
+
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a_bytes = a.as_bytes();
+    let b_bytes = b.as_bytes();
+    if a_bytes.is_empty() {
+        return b_bytes.len();
+    }
+    if b_bytes.is_empty() {
+        return a_bytes.len();
+    }
+    let mut prev: Vec<usize> = (0..=b_bytes.len()).collect();
+    let mut curr = vec![0usize; b_bytes.len() + 1];
+    for (i, &ac) in a_bytes.iter().enumerate() {
+        curr[0] = i + 1;
+        for (j, &bc) in b_bytes.iter().enumerate() {
+            let cost = if ac == bc { 0 } else { 1 };
+            curr[j + 1] = std::cmp::min(
+                std::cmp::min(prev[j + 1] + 1, curr[j] + 1),
+                prev[j] + cost,
+            );
+        }
+        prev.clone_from_slice(&curr);
+    }
+    prev[b_bytes.len()]
+}
+
+fn name_similarity(a_first: &str, a_last: &str, b_first: &str, b_last: &str) -> f32 {
+    let a = normalize_name(a_first, a_last);
+    let b = normalize_name(b_first, b_last);
+    if a.is_empty() || b.is_empty() {
+        return 0.0;
+    }
+    let dist = levenshtein(&a, &b) as f32;
+    let max_len = a.len().max(b.len()) as f32;
+    if max_len == 0.0 {
+        0.0
+    } else {
+        1.0 - (dist / max_len)
+    }
+}
+
 fn value_contains_option(value: &Option<String>, target: &str) -> bool {
     let Some(value) = value else { return false; };
     let v = value.trim();
@@ -190,8 +280,8 @@ fn value_contains_option(value: &Option<String>, target: &str) -> bool {
 
 #[tauri::command]
 pub fn contact_list(db: State<DbState>) -> Result<Vec<Contact>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn_guard.as_mut().ok_or("DB not initialized")?;
     let sql = "SELECT c.id, c.first_name, c.last_name, c.title,
         COALESCE(co.name, c.company), c.company_id, c.city, c.country,
         c.email, c.email_secondary, c.phone, c.phone_secondary,
@@ -865,6 +955,266 @@ pub fn search_contacts(db: State<DbState>, q: String) -> Result<Vec<String>, Str
         }
     }
     Ok(ids)
+}
+
+#[tauri::command]
+pub fn dedup_candidates(db: State<DbState>) -> Result<Vec<DedupCandidate>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let sql = "SELECT c.id, c.first_name, c.last_name, c.title,
+        COALESCE(co.name, c.company), c.company_id, c.city, c.country,
+        c.email, c.email_secondary, c.phone, c.phone_secondary,
+        c.linkedin_url, c.twitter_url, c.website, c.notes,
+        c.last_touched_at, c.next_touch_at, c.created_at, c.updated_at
+        FROM contacts c LEFT JOIN companies co ON c.company_id = co.id
+        ORDER BY c.updated_at DESC";
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], row_to_contact)
+        .map_err(|e| e.to_string())?;
+    let contacts: Vec<Contact> = rows.filter_map(|r| r.ok()).collect();
+
+    let mut by_id: HashMap<String, Contact> = HashMap::new();
+    for c in contacts.iter() {
+        by_id.insert(c.id.clone(), c.clone());
+    }
+
+    #[derive(Default)]
+    struct ReasonFlags {
+        email: bool,
+        phone: bool,
+        name: bool,
+    }
+
+    let mut pair_reasons: HashMap<(String, String), ReasonFlags> = HashMap::new();
+
+    let mut email_map: HashMap<String, Vec<String>> = HashMap::new();
+    let mut phone_map: HashMap<String, Vec<String>> = HashMap::new();
+
+    for c in contacts.iter() {
+        if let Some(e) = normalize_email(&c.email) {
+            email_map.entry(e).or_default().push(c.id.clone());
+        }
+        if let Some(e) = normalize_email(&c.email_secondary) {
+            email_map.entry(e).or_default().push(c.id.clone());
+        }
+        if let Some(p) = normalize_phone(&c.phone) {
+            phone_map.entry(p).or_default().push(c.id.clone());
+        }
+        if let Some(p) = normalize_phone(&c.phone_secondary) {
+            phone_map.entry(p).or_default().push(c.id.clone());
+        }
+    }
+
+    let mut add_reason = |a: &str, b: &str, kind: &str| {
+        if a == b {
+            return;
+        }
+        let (x, y) = if a < b { (a.to_string(), b.to_string()) } else { (b.to_string(), a.to_string()) };
+        let entry = pair_reasons.entry((x, y)).or_default();
+        match kind {
+            "email" => entry.email = true,
+            "phone" => entry.phone = true,
+            "name" => entry.name = true,
+            _ => {}
+        }
+    };
+
+    for ids in email_map.values() {
+        if ids.len() < 2 {
+            continue;
+        }
+        for i in 0..ids.len() {
+            for j in (i + 1)..ids.len() {
+                add_reason(&ids[i], &ids[j], "email");
+            }
+        }
+    }
+
+    for ids in phone_map.values() {
+        if ids.len() < 2 {
+            continue;
+        }
+        for i in 0..ids.len() {
+            for j in (i + 1)..ids.len() {
+                add_reason(&ids[i], &ids[j], "phone");
+            }
+        }
+    }
+
+    let name_threshold = 0.85;
+    for i in 0..contacts.len() {
+        for j in (i + 1)..contacts.len() {
+            let a = &contacts[i];
+            let b = &contacts[j];
+            let sim = name_similarity(&a.first_name, &a.last_name, &b.first_name, &b.last_name);
+            if sim >= name_threshold {
+                add_reason(&a.id, &b.id, "name");
+            }
+        }
+    }
+
+    let mut candidates = Vec::new();
+    for ((a_id, b_id), flags) in pair_reasons {
+        if let (Some(a), Some(b)) = (by_id.get(&a_id), by_id.get(&b_id)) {
+            let mut reasons = Vec::new();
+            if flags.email {
+                reasons.push("email".to_string());
+            }
+            if flags.phone {
+                reasons.push("phone".to_string());
+            }
+            if flags.name {
+                reasons.push("name".to_string());
+            }
+            if !reasons.is_empty() {
+                candidates.push(DedupCandidate {
+                    a: a.clone(),
+                    b: b.clone(),
+                    reasons,
+                });
+            }
+        }
+    }
+
+    Ok(candidates)
+}
+
+#[tauri::command]
+pub fn contact_merge(db: State<DbState>, input: MergeContactInput) -> Result<Contact, String> {
+    let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    if !is_valid_email(&input.merged.email) || !is_valid_email(&input.merged.email_secondary) {
+        return Err("Geçersiz email formatı".to_string());
+    }
+    if !is_valid_phone(&input.merged.phone) || !is_valid_phone(&input.merged.phone_secondary) {
+        return Err("Geçersiz telefon formatı".to_string());
+    }
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let sql = "SELECT c.id, c.first_name, c.last_name, c.title,
+        COALESCE(co.name, c.company), c.company_id, c.city, c.country,
+        c.email, c.email_secondary, c.phone, c.phone_secondary,
+        c.linkedin_url, c.twitter_url, c.website, c.notes,
+        c.last_touched_at, c.next_touch_at, c.created_at, c.updated_at
+        FROM contacts c LEFT JOIN companies co ON c.company_id = co.id WHERE c.id = ?1";
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let primary = stmt
+        .query_row(params![input.primary_id.clone()], row_to_contact)
+        .map_err(|e| e.to_string())?;
+    let secondary = stmt
+        .query_row(params![input.secondary_id.clone()], row_to_contact)
+        .map_err(|e| e.to_string())?;
+    drop(stmt);
+
+    let last_touched_at = match (primary.last_touched_at.clone(), secondary.last_touched_at.clone()) {
+        (Some(a), Some(b)) => Some(if a >= b { a } else { b }),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        _ => None,
+    };
+    let next_touch_at = match (primary.next_touch_at.clone(), secondary.next_touch_at.clone()) {
+        (Some(a), Some(b)) => Some(if a <= b { a } else { b }),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        _ => None,
+    };
+
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "UPDATE contacts SET first_name=?1, last_name=?2, title=?3, company=?4, company_id=?5, city=?6, country=?7, email=?8, email_secondary=?9, phone=?10, phone_secondary=?11, linkedin_url=?12, twitter_url=?13, website=?14, notes=?15, last_touched_at=?16, next_touch_at=?17, updated_at=?18 WHERE id=?19",
+        params![
+            input.merged.first_name,
+            input.merged.last_name,
+            input.merged.title,
+            input.merged.company,
+            input.merged.company_id,
+            input.merged.city,
+            input.merged.country,
+            input.merged.email,
+            input.merged.email_secondary,
+            input.merged.phone,
+            input.merged.phone_secondary,
+            input.merged.linkedin_url,
+            input.merged.twitter_url,
+            input.merged.website,
+            input.merged.notes,
+            last_touched_at,
+            next_touch_at,
+            now,
+            &input.primary_id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Merge tags
+    tx.execute(
+        "INSERT OR IGNORE INTO contact_tags (contact_id, tag_id)
+         SELECT ?1, tag_id FROM contact_tags WHERE contact_id = ?2",
+        params![&input.primary_id, &input.secondary_id],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.execute(
+        "DELETE FROM contact_tags WHERE contact_id = ?1",
+        params![&input.secondary_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Merge custom values: replace primary with provided values if present
+    if let Some(values) = input.custom_values {
+        tx.execute(
+            "DELETE FROM contact_custom_values WHERE contact_id = ?1",
+            params![&input.primary_id],
+        )
+        .map_err(|e| e.to_string())?;
+        for v in values {
+            tx.execute(
+                "INSERT INTO contact_custom_values (contact_id, field_id, value) VALUES (?1, ?2, ?3)",
+                params![&input.primary_id, v.field_id, v.value],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    } else {
+        tx.execute(
+            "INSERT OR IGNORE INTO contact_custom_values (contact_id, field_id, value)
+             SELECT ?1, field_id, value FROM contact_custom_values WHERE contact_id = ?2",
+            params![&input.primary_id, &input.secondary_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.execute(
+        "DELETE FROM contact_custom_values WHERE contact_id = ?1",
+        params![&input.secondary_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Move related rows
+    tx.execute(
+        "UPDATE notes SET contact_id = ?1 WHERE contact_id = ?2",
+        params![&input.primary_id, &input.secondary_id],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.execute(
+        "UPDATE reminders SET contact_id = ?1 WHERE contact_id = ?2",
+        params![&input.primary_id, &input.secondary_id],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.execute(
+        "UPDATE interactions SET contact_id = ?1 WHERE contact_id = ?2",
+        params![&input.primary_id, &input.secondary_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "DELETE FROM contacts WHERE id = ?1",
+        params![&input.secondary_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+
+    contact_get(db, input.primary_id.clone())?
+        .ok_or_else(|| "Contact not found after merge".to_string())
 }
 
 #[cfg(test)]

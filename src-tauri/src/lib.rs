@@ -38,6 +38,8 @@ pub fn run() {
             commands::reminder_snooze,
             commands::import_contacts,
             commands::search_contacts,
+            commands::dedup_candidates,
+            commands::contact_merge,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

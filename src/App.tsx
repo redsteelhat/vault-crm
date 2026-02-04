@@ -7,6 +7,7 @@ import { Companies } from "@/pages/Companies";
 import { CompanyDetail } from "@/pages/CompanyDetail";
 import { Settings } from "@/pages/Settings";
 import { Import } from "@/pages/Import";
+import { Dedup } from "@/pages/Dedup";
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
         <Route path="/companies/:id" element={<CompanyDetail />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/import" element={<Import />} />
+        <Route path="/dedup" element={<Dedup />} />
       </Routes>
     </MainLayout>
   );

@@ -144,6 +144,19 @@ export interface CustomValueInput {
   value?: string | null;
 }
 
+export interface DedupCandidate {
+  a: Contact;
+  b: Contact;
+  reasons: string[];
+}
+
+export interface MergeContactInput {
+  primary_id: string;
+  secondary_id: string;
+  merged: CreateContactInput;
+  custom_values?: CustomValueInput[];
+}
+
 export const api = {
   contactList: () => invoke<Contact[]>("contact_list"),
   contactGet: (id: string) => invoke<Contact | null>("contact_get", { id }),
@@ -180,4 +193,7 @@ export const api = {
   importContacts: (rows: ImportRow[]) =>
     invoke<number>("import_contacts", { rows }),
   searchContacts: (q: string) => invoke<string[]>("search_contacts", { q }),
+  dedupCandidates: () => invoke<DedupCandidate[]>("dedup_candidates"),
+  contactMerge: (input: MergeContactInput) =>
+    invoke<Contact>("contact_merge", { input }),
 };

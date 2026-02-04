@@ -60,12 +60,14 @@ export function Import() {
   const [preview, setPreview] = useState<ImportRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState<number | null>(null);
+  const [dedupCount, setDedupCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const onFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     setError(null);
     setDone(null);
+    setDedupCount(null);
     if (!f) {
       setFile(null);
       setPreview([]);
@@ -104,6 +106,10 @@ export function Import() {
             setDone(count);
             setFile(null);
             setPreview([]);
+            return api.dedupCandidates();
+          })
+          .then((candidates) => {
+            setDedupCount(candidates.length);
           })
           .catch((e) => setError(String(e)))
           .finally(() => setImporting(false));
@@ -151,6 +157,14 @@ export function Import() {
               {done} kişi içe aktarıldı.{" "}
               <Button variant="link" className="h-auto p-0" onClick={() => navigate("/contacts")}>
                 Kişilere git →
+              </Button>
+            </p>
+          )}
+          {dedupCount !== null && dedupCount > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {dedupCount} olası tekrar bulundu.{" "}
+              <Button variant="link" className="h-auto p-0" onClick={() => navigate("/dedup")}>
+                Duplikatlara git →
               </Button>
             </p>
           )}
