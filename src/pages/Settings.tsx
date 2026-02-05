@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus } from "lucide-react";
+import { Plus, Shield } from "lucide-react";
 import {
   getHealthThresholds,
   setHealthThresholds,
   type HealthThresholds,
 } from "@/lib/relationshipHealth";
+import { getCrashReportOptIn, setCrashReportOptIn } from "@/lib/privacy";
 
 const FIELD_KINDS = [
   { value: "text", label: "Metin" },
@@ -31,6 +32,7 @@ export function Settings() {
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
   const [healthThresholds, setHealthThresholdsState] = useState<HealthThresholds>(getHealthThresholds());
   const [healthThresholdsSaving, setHealthThresholdsSaving] = useState(false);
+  const [crashReportOptIn, setCrashReportOptInState] = useState(getCrashReportOptIn());
 
   useEffect(() => {
     setHealthThresholdsState(getHealthThresholds());
@@ -80,6 +82,36 @@ export function Settings() {
   return (
     <div className="p-6">
       <h1 className="mb-6 text-2xl font-semibold">Ayarlar</h1>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="h-4 w-4" />
+            Gizlilik (F2)
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Telemetri kapalı. Hiçbir kullanım verisi gönderilmez (F2.2).
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex cursor-pointer items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={crashReportOptIn}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setCrashReportOptInState(v);
+                setCrashReportOptIn(v);
+              }}
+              className="rounded"
+            />
+            <span>Crash raporu (isteğe bağlı, anonim) — F2.3</span>
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Açıldığında uygulama çöktüğünde anonim crash log gönderilebilir. Varsayılan: kapalı.
+          </p>
+        </CardContent>
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>

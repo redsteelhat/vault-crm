@@ -46,7 +46,13 @@ pnpm tauri build
 3. **Kişi kartı** — Kişilere tıkla, not ekle, şablonlar: Meeting Notes, Follow-up, Intro.
 4. **Hatırlatıcı** — “14 gün sonra follow-up” ekle; yerel bildirim (Tauri) ile hatırlatılır.
 
-Veri yalnızca cihazda (app data dir’de `vault.db`). Şifreleme (SQLCipher / at-rest) ve Keychain entegrasyonu backlog’ta; MVP’de plain SQLite kullanılıyor.
+Veri yalnızca cihazda (app data dir’de şifreli `vault.db.encrypted`; F1).
+
+## Gizlilik ve offline (F2)
+
+- **Offline by default (F2.1):** Tüm temel akışlar (kişiler, şirketler, notlar, hatırlatıcılar, import/export) ağ olmadan çalışır. Veri yalnızca yerel SQLite’dadır. “Sync” ayrı bir modül olarak planlanıyor (örn. G1 klasör senkronu).
+- **Telemetri kapalı (F2.2):** Varsayılan olarak hiçbir kullanım verisi veya analitik gönderilmez.
+- **Crash raporu (F2.3):** İsteğe bağlı; Ayarlar > Gizlilik’ten açılırsa crash log anonim olarak gönderilebilir (özellik ileride tamamlanacak).
 
 ## İkonlar
 

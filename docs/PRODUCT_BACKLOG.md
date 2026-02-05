@@ -154,9 +154,9 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### F2 — Offline ve telemetri
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| F2.1 | Offline by default | Tüm core akışlar ağ olmadan çalışır; “sync” ayrı modül | ☐ |
-| F2.2 | Telemetry kapalı | Varsayılan: hiçbir kullanım verisi gönderilmez | ☐ |
-| F2.3 | Opt-in crash report | İsteğe bağlı: crash log anonim ve sadece kullanıcı açarsa | ☐ |
+| F2.1 | Offline by default | Tüm core akışlar ağ olmadan çalışır; “sync” ayrı modül | ☑ |
+| F2.2 | Telemetry kapalı | Varsayılan: hiçbir kullanım verisi gönderilmez | ☑ |
+| F2.3 | Opt-in crash report | İsteğe bağlı: crash log anonim ve sadece kullanıcı açarsa | ☑ |
 
 ### F3 — Yedekleme ve panic
 | # | Özellik | Detay / Kriter | Todo |
