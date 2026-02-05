@@ -9,6 +9,7 @@ import { CompanyDetail } from "@/pages/CompanyDetail";
 import { Settings } from "@/pages/Settings";
 import { Import } from "@/pages/Import";
 import { Dedup } from "@/pages/Dedup";
+import { Export } from "@/pages/Export";
 import { Inbox } from "@/pages/Inbox";
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
         <Route path="/companies/:id" element={<CompanyDetail />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/import" element={<Import />} />
+        <Route path="/export" element={<Export />} />
         <Route path="/dedup" element={<Dedup />} />
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

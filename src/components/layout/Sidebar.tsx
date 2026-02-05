@@ -6,6 +6,7 @@ import {
   Users,
   Building2,
   Upload,
+  Download,
   Settings,
   GitMerge,
 } from "lucide-react";
@@ -17,6 +18,7 @@ const nav = [
   { to: "/companies", label: "Şirketler", icon: Building2 },
   { to: "/dedup", label: "Duplikatlar", icon: GitMerge },
   { to: "/import", label: "Import", icon: Upload },
+  { to: "/export", label: "Export", icon: Download },
   { to: "/settings", label: "Ayarlar", icon: Settings },
 ];
 

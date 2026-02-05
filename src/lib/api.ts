@@ -265,4 +265,7 @@ export const api = {
   dedupCandidates: () => invoke<DedupCandidate[]>("dedup_candidates"),
   contactMerge: (input: MergeContactInput) =>
     invoke<Contact>("contact_merge", { input }),
+  /** E3: Write export file to user-chosen path (local only, no server) */
+  writeExportFile: (path: string, content: string) =>
+    invoke<void>("write_export_file", { path, content }),
 };

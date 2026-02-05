@@ -136,9 +136,9 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### E3 — Export (data portability)
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| E3.1 | CSV export | Seçilen alanlar, filtre uygulanmış liste; UTF-8 | ☐ |
-| E3.2 | JSON export | Tam veri seti veya seçili segment; yedek/taşıma amaçlı | ☐ |
-| E3.3 | Veri kullanıcıda | Export dosyası kullanıcının seçtiği yere; uygulama sunucuya göndermez | ☐ |
+| E3.1 | CSV export | Seçilen alanlar, filtre uygulanmış liste; UTF-8 | ☑ |
+| E3.2 | JSON export | Tam veri seti veya seçili segment; yedek/taşıma amaçlı | ☑ |
+| E3.3 | Veri kullanıcıda | Export dosyası kullanıcının seçtiği yere; uygulama sunucuya göndermez | ☑ |
 
 ---
 

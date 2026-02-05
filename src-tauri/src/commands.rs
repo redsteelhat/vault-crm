@@ -1779,6 +1779,14 @@ pub fn contact_merge(db: State<DbState>, input: MergeContactInput) -> Result<Con
     Ok(merged)
 }
 
+// ---- E3 Export (data portability): write to user-chosen path ----
+
+/// Writes string content to a file at the given path. Path comes from the save dialog (E3.3).
+#[tauri::command]
+pub fn write_export_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -9,6 +9,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let conn = db::init_db(app.handle()).map_err(|e| e.to_string())?;
             app.manage(DbState(std::sync::Mutex::new(Some(conn))));
@@ -50,6 +51,7 @@ pub fn run() {
             commands::contact_ids_with_hashtag,
             commands::dedup_candidates,
             commands::contact_merge,
+            commands::write_export_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

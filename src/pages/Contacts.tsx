@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserPlus, Search, Bookmark, Trash2 } from "lucide-react";
+import { UserPlus, Search, Bookmark, Trash2, Download } from "lucide-react";
 import { getRelationshipHealthRecencyOnly, HEALTH_COLORS, type HealthStatus } from "@/lib/relationshipHealth";
 import {
   getSavedViews,
@@ -391,6 +391,13 @@ export function Contacts() {
           </Button>
           <Button asChild>
             <Link to="/import">CSV Import</Link>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => navigate("/export", { state: { contacts: filtered } })}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Dışa aktar
           </Button>
         </div>
       </div>
