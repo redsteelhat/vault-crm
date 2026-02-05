@@ -268,4 +268,16 @@ export const api = {
   /** E3: Write export file to user-chosen path (local only, no server) */
   writeExportFile: (path: string, content: string) =>
     invoke<void>("write_export_file", { path, content }),
+
+  /** F1: Encryption state — "ready" or need_setup (first_run / migrate_plain) */
+  getEncryptionState: () =>
+    invoke<{ ready?: void; need_setup?: { reason: "first_run" | "migrate_plain" } }>("get_encryption_state"),
+  /** F1.3: First-run — create key (device or passphrase), store in keychain */
+  encryptionSetupCreateKey: (passphrase?: string | null) =>
+    invoke<void>("encryption_setup_create_key", { passphrase: passphrase ?? null }),
+  /** F1.1: Migrate plain vault.db to encrypted; store key in keychain */
+  encryptionMigratePlainDb: (passphrase?: string | null) =>
+    invoke<void>("encryption_migrate_plain_db", { passphrase: passphrase ?? null }),
+  /** After setup/migrate: open DB and clear setup state */
+  encryptionSetupOpenDb: () => invoke<void>("encryption_setup_open_db"),
 };

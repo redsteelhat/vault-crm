@@ -147,9 +147,9 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### F1 — Şifreleme ve anahtar
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| F1.1 | At-rest encryption | Veritabanı (SQLite) şifreli; açılışta tek anahtar (passphrase veya device key) | ☐ |
-| F1.2 | Anahtar saklama | OS Keychain (macOS/iOS), Credential Manager (Windows), Keychain (Android) — uygulama anahtarı orada | ☐ |
-| F1.3 | İlk kurulum | İlk açılışta “şifreleme anahtarını oluştur” / “passphrase belirle”; kurtarma uyarısı | ☐ |
+| F1.1 | At-rest encryption | Veritabanı (SQLite) şifreli; açılışta tek anahtar (passphrase veya device key) | ☑ |
+| F1.2 | Anahtar saklama | OS Keychain (macOS/iOS), Credential Manager (Windows), Keychain (Android) — uygulama anahtarı orada | ☑ |
+| F1.3 | İlk kurulum | İlk açılışta “şifreleme anahtarını oluştur” / “passphrase belirle”; kurtarma uyarısı | ☑ |
 
 ### F2 — Offline ve telemetri
 | # | Özellik | Detay / Kriter | Todo |

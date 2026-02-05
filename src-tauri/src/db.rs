@@ -1,12 +1,104 @@
 // SQLite connection and schema — local-only, no cloud.
-// Encryption (SQLCipher / at-rest) can be added later; MVP uses plain SQLite in app data dir.
+// F1.1: At-rest encryption — DB file encrypted with key from OS keychain (F1.2).
 
+use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Key, Nonce};
+use argon2::Argon2;
+use base64::{engine::general_purpose, Engine as _};
+use rand::rngs::OsRng;
+use rand::RngCore;
 use rusqlite::{params, Connection, Result as SqlResult};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
+const KEYRING_SERVICE: &str = "VaultCRM";
+const KEYRING_ENTRY: &str = "db_master_key";
+const VAULT_DB: &str = "vault.db";
+const VAULT_DB_ENCRYPTED: &str = "vault.db.encrypted";
+const VAULT_DB_TMP: &str = "vault.db.tmp";
+
+/// F1.2: Key in OS keychain (Windows Credential Manager, macOS Keychain, Linux Secret Service).
+fn get_db_key() -> Result<Option<Vec<u8>>, String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ENTRY).map_err(|e| e.to_string())?;
+    let password = match entry.get_password() {
+        Ok(p) => p,
+        Err(_) => return Ok(None), // no entry yet
+    };
+    let bytes = general_purpose::STANDARD.decode(password.as_bytes()).map_err(|e| e.to_string())?;
+    if bytes.len() != 32 {
+        return Ok(None);
+    }
+    Ok(Some(bytes))
+}
+
+fn set_db_key(key: &[u8]) -> Result<(), String> {
+    let encoded = general_purpose::STANDARD.encode(key);
+    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ENTRY).map_err(|e| e.to_string())?;
+    entry.set_password(&encoded).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Derive 32-byte key from passphrase (F1.3).
+fn derive_key(passphrase: &str) -> Result<Vec<u8>, String> {
+    let mut key = [0u8; 32];
+    Argon2::default()
+        .hash_password_into(passphrase.as_bytes(), b"vaultcrm_db_salt", &mut key)
+        .map_err(|e| e.to_string())?;
+    Ok(key.to_vec())
+}
+
+fn encrypt_file(key: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, String> {
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher.encrypt(nonce, plaintext).map_err(|e| e.to_string())?;
+    let mut out = Vec::with_capacity(12 + ciphertext.len());
+    out.extend_from_slice(&nonce_bytes);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
+}
+
+fn decrypt_file(key: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, String> {
+    if ciphertext.len() < 12 {
+        return Err("Encrypted payload too short".to_string());
+    }
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let nonce = Nonce::from_slice(&ciphertext[..12]);
+    cipher.decrypt(nonce, &ciphertext[12..]).map_err(|e| e.to_string())
+}
+
 pub struct DbState(pub Mutex<Option<Connection>>);
+
+/// Paths for encrypted DB flush (temp + encrypted file).
+pub struct EncryptedPathsState(pub Mutex<Option<(PathBuf, PathBuf)>>);
+
+/// F1.3: When Some(reason), frontend must show setup; when None, DB is ready.
+pub struct EncryptionSetupState(pub Mutex<Option<SetupReason>>);
+
+/// F1.3: Reason for setup screen.
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SetupReason {
+    FirstRun,
+    MigratePlain,
+}
+
+#[derive(Debug)]
+pub enum InitDbError {
+    NeedSetup(SetupReason),
+    Other(String),
+}
+
+impl std::fmt::Display for InitDbError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InitDbError::NeedSetup(r) => write!(f, "NeedSetup({:?})", r),
+            InitDbError::Other(s) => write!(f, "{}", s),
+        }
+    }
+}
 
 fn app_data_dir(app: &AppHandle) -> std::io::Result<PathBuf> {
     let app_data = app
@@ -17,13 +109,113 @@ fn app_data_dir(app: &AppHandle) -> std::io::Result<PathBuf> {
     Ok(app_data)
 }
 
-pub fn init_db(app: &AppHandle) -> SqlResult<Connection> {
-    let app_data = app_data_dir(app).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-    let path = app_data.join("vault.db");
-    let conn = Connection::open(&path)?;
-    init_schema(&conn)?;
-    init_settings(&conn, &app_data)?;
-    Ok(conn)
+/// Opens DB: if key exists and vault.db.encrypted exists, decrypt to temp and open.
+/// If no key: FirstRun (no files) or MigratePlain (vault.db exists).
+pub fn init_db(app: &AppHandle) -> Result<(Connection, Option<(PathBuf, PathBuf)>), InitDbError> {
+    let app_data = app_data_dir(app).map_err(|e| InitDbError::Other(e.to_string()))?;
+    let path_plain = app_data.join(VAULT_DB);
+    let path_encrypted = app_data.join(VAULT_DB_ENCRYPTED);
+    let path_tmp = app_data.join(VAULT_DB_TMP);
+
+    let key = get_db_key().map_err(|e| InitDbError::Other(e))?;
+
+    if let Some(key) = key {
+        // Key exists — use encrypted DB.
+        if path_encrypted.exists() {
+            let ciphertext = std::fs::read(&path_encrypted).map_err(|e| InitDbError::Other(e.to_string()))?;
+            let plaintext = decrypt_file(&key, &ciphertext).map_err(|e| InitDbError::Other(e))?;
+            std::fs::write(&path_tmp, &plaintext).map_err(|e| InitDbError::Other(e.to_string()))?;
+            let conn = Connection::open(&path_tmp).map_err(|e| InitDbError::Other(e.to_string()))?;
+            return Ok((conn, Some((path_tmp, path_encrypted))));
+        }
+        // Key exists but no encrypted file — treat as first run with key already stored (e.g. after setup_create_key).
+        // Create empty DB in temp, init schema, encrypt and write, then open.
+        let conn = Connection::open(&path_tmp).map_err(|e| InitDbError::Other(e.to_string()))?;
+        init_schema(&conn).map_err(|e| InitDbError::Other(e.to_string()))?;
+        init_settings(&conn, &app_data).map_err(|e| InitDbError::Other(e.to_string()))?;
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);").ok();
+        let plaintext = std::fs::read(&path_tmp).map_err(|e| InitDbError::Other(e.to_string()))?;
+        let ciphertext = encrypt_file(&key, &plaintext).map_err(|e| InitDbError::Other(e))?;
+        std::fs::write(&path_encrypted, &ciphertext).map_err(|e| InitDbError::Other(e.to_string()))?;
+        return Ok((conn, Some((path_tmp, path_encrypted))));
+    }
+
+    // No key.
+    if path_plain.exists() {
+        return Err(InitDbError::NeedSetup(SetupReason::MigratePlain));
+    }
+    if path_encrypted.exists() {
+        return Err(InitDbError::Other("Encrypted DB exists but no key in keychain".to_string()));
+    }
+    Err(InitDbError::NeedSetup(SetupReason::FirstRun))
+}
+
+/// Flush current DB to encrypted file (e.g. on exit). Caller must hold paths from EncryptedPathsState.
+pub fn flush_encrypted_db(conn: &Connection, temp_path: &Path, encrypted_path: &Path) -> Result<(), String> {
+    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);").map_err(|e| e.to_string())?;
+    let key = get_db_key()?
+        .ok_or_else(|| "No key in keychain".to_string())?;
+    let plaintext = std::fs::read(temp_path).map_err(|e| e.to_string())?;
+    let ciphertext = encrypt_file(&key, &plaintext)?;
+    std::fs::write(encrypted_path, &ciphertext).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// F1.3: First-run — create key (device or from passphrase), empty DB, encrypt, store key.
+pub fn setup_create_key(app: &AppHandle, passphrase: Option<String>) -> Result<(), String> {
+    let app_data = app_data_dir(app).map_err(|e| e.to_string())?;
+    let path_encrypted = app_data.join(VAULT_DB_ENCRYPTED);
+    let path_tmp = app_data.join(VAULT_DB_TMP);
+
+    let key = if let Some(p) = passphrase {
+        if p.is_empty() {
+            return Err("Passphrase boş olamaz".to_string());
+        }
+        derive_key(&p)?
+    } else {
+        let mut key = [0u8; 32];
+        OsRng.fill_bytes(&mut key);
+        key.to_vec()
+    };
+
+    set_db_key(&key)?;
+    let conn = Connection::open(&path_tmp).map_err(|e| e.to_string())?;
+    init_schema(&conn).map_err(|e| e.to_string())?;
+    init_settings(&conn, &app_data).map_err(|e| e.to_string())?;
+    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);").ok();
+    let plaintext = std::fs::read(&path_tmp).map_err(|e| e.to_string())?;
+    let ciphertext = encrypt_file(&key, &plaintext)?;
+    std::fs::write(&path_encrypted, &ciphertext).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Migrate plain vault.db to encrypted: read plain, encrypt, write vault.db.encrypted, store key, backup plain.
+pub fn migrate_plain_to_encrypted(app: &AppHandle, passphrase: Option<String>) -> Result<(), String> {
+    let app_data = app_data_dir(app).map_err(|e| e.to_string())?;
+    let path_plain = app_data.join(VAULT_DB);
+    let path_encrypted = app_data.join(VAULT_DB_ENCRYPTED);
+    if !path_plain.exists() {
+        return Err("Plain vault.db bulunamadı".to_string());
+    }
+
+    let key = if let Some(p) = passphrase {
+        if p.is_empty() {
+            return Err("Passphrase boş olamaz".to_string());
+        }
+        derive_key(&p)?
+    } else {
+        let mut key = [0u8; 32];
+        OsRng.fill_bytes(&mut key);
+        key.to_vec()
+    };
+
+    set_db_key(&key)?;
+    let plaintext = std::fs::read(&path_plain).map_err(|e| e.to_string())?;
+    let ciphertext = encrypt_file(&key, &plaintext)?;
+    std::fs::write(&path_encrypted, &ciphertext).map_err(|e| e.to_string())?;
+    let backup = app_data.join("vault.db.plain.backup");
+    std::fs::rename(&path_plain, &backup).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn init_schema(conn: &Connection) -> SqlResult<()> {
@@ -173,7 +365,6 @@ fn init_schema(conn: &Connection) -> SqlResult<()> {
         END;
         ",
     )?;
-    // Migration: add new columns to contacts if missing (existing DBs)
     let alter_columns = [
         "ALTER TABLE contacts ADD COLUMN twitter_url TEXT",
         "ALTER TABLE contacts ADD COLUMN email_secondary TEXT",
@@ -181,9 +372,7 @@ fn init_schema(conn: &Connection) -> SqlResult<()> {
         "ALTER TABLE contacts ADD COLUMN company_id TEXT",
     ];
     for sql in alter_columns {
-        if conn.execute(sql, []).is_err() {
-            // Column may already exist; ignore
-        }
+        if conn.execute(sql, []).is_err() {}
     }
     seed_default_custom_fields(conn)?;
     Ok(())
@@ -206,11 +395,9 @@ fn init_settings(conn: &Connection, app_data: &Path) -> SqlResult<()> {
 }
 
 fn seed_default_custom_fields(conn: &Connection) -> SqlResult<()> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM custom_fields",
-        [],
-        |r| r.get(0),
-    ).unwrap_or(0);
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM custom_fields", [], |r| r.get(0))
+        .unwrap_or(0);
     if count > 0 {
         return Ok(());
     }

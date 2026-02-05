@@ -15,7 +15,7 @@ use base64::{engine::general_purpose, Engine as _};
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-use crate::db::DbState;
+use crate::db::{DbState, EncryptedPathsState, EncryptionSetupState};
 
 // ---- Company (A1.5 şirket kartı) ----
 
@@ -1785,6 +1785,54 @@ pub fn contact_merge(db: State<DbState>, input: MergeContactInput) -> Result<Con
 #[tauri::command]
 pub fn write_export_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
+}
+
+// ---- F1 Encryption & key (F1.2 keychain, F1.3 first-run setup) ----
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EncryptionStateResponse {
+    Ready,
+    NeedSetup { reason: crate::db::SetupReason },
+}
+
+/// F1.3: Returns "ready" or need_setup with reason (first_run / migrate_plain).
+#[tauri::command]
+pub fn get_encryption_state(setup: State<EncryptionSetupState>) -> Result<EncryptionStateResponse, String> {
+    let guard = setup.0.lock().map_err(|e| e.to_string())?;
+    Ok(match guard.as_ref() {
+        Some(reason) => EncryptionStateResponse::NeedSetup {
+            reason: reason.clone(),
+        },
+        None => EncryptionStateResponse::Ready,
+    })
+}
+
+/// F1.3: First-run — create key (device or passphrase), empty encrypted DB, store key in keychain.
+#[tauri::command]
+pub fn encryption_setup_create_key(app: tauri::AppHandle, passphrase: Option<String>) -> Result<(), String> {
+    crate::db::setup_create_key(&app, passphrase)
+}
+
+/// F1.1/F1.2: Migrate plain vault.db to encrypted; store key in keychain.
+#[tauri::command]
+pub fn encryption_migrate_plain_db(app: tauri::AppHandle, passphrase: Option<String>) -> Result<(), String> {
+    crate::db::migrate_plain_to_encrypted(&app, passphrase)
+}
+
+/// After setup or migrate: open DB and clear setup state.
+#[tauri::command]
+pub fn encryption_setup_open_db(
+    app: tauri::AppHandle,
+    db: State<DbState>,
+    paths: State<EncryptedPathsState>,
+    setup: State<EncryptionSetupState>,
+) -> Result<(), String> {
+    let (conn, path_tuple) = crate::db::init_db(&app).map_err(|e| e.to_string())?;
+    *db.0.lock().map_err(|e| e.to_string())? = Some(conn);
+    *paths.0.lock().map_err(|e| e.to_string())? = path_tuple;
+    *setup.0.lock().map_err(|e| e.to_string())? = None;
+    Ok(())
 }
 
 #[cfg(test)]
