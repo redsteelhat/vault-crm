@@ -102,10 +102,10 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### D1 — Local notification ve reminder
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| D1.1 | OS bildirimi | Desktop/mobile OS üzerinden local notification (sunucu yok) | ☐ |
-| D1.2 | Kişi bazlı “Next action” | Her kişi için tek “next action” + tarih/saat; bildirim bu tarihte | ☐ |
-| D1.3 | Snooze | Bildirimde snooze (1h, 1 gün, 7/14/30 gün) | ☐ |
-| D1.4 | Recurring | “Her X günde bir hatırlat” veya “until done” (yapılana kadar tekrarla) | ☐ |
+| D1.1 | OS bildirimi | Desktop/mobile OS üzerinden local notification (sunucu yok) | ☑ |
+| D1.2 | Kişi bazlı “Next action” | Her kişi için tek “next action” + tarih/saat; bildirim bu tarihte | ☑ |
+| D1.3 | Snooze | Bildirimde snooze (1h, 1 gün, 7/14/30 gün) | ☑ |
+| D1.4 | Recurring | “Her X günde bir hatırlat” veya “until done” (yapılana kadar tekrarla) | ☑ |
 
 ### D2 — Inbox ve review
 | # | Özellik | Detay / Kriter | Todo |

@@ -5,6 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, Bell, UserPlus } from "lucide-react";
 
+function effectiveDueAt(r: Reminder): Date {
+  return r.snooze_until?.trim() ? new Date(r.snooze_until) : new Date(r.due_at);
+}
+
 async function showDueReminderNotifications(reminders: Reminder[]) {
   try {
     const { isPermissionGranted, requestPermission, sendNotification } = await import(
@@ -18,7 +22,7 @@ async function showDueReminderNotifications(reminders: Reminder[]) {
     if (!granted) return;
     const now = new Date();
     for (const r of reminders) {
-      const due = new Date(r.due_at);
+      const due = effectiveDueAt(r);
       if (due <= now) {
         sendNotification({ title: "VaultCRM: Hatırlatıcı", body: r.title });
       }
@@ -64,7 +68,7 @@ export function Dashboard() {
         setContacts(c);
         setReminders(r);
         const now = new Date();
-        const due = r.filter((x) => new Date(x.due_at) <= now);
+        const due = r.filter((x) => effectiveDueAt(x) <= now);
         const toNotify = due.filter((x) => !notifiedDue.current.has(x.id));
         toNotify.forEach((x) => notifiedDue.current.add(x.id));
         if (toNotify.length > 0) showDueReminderNotifications(toNotify);
@@ -91,7 +95,7 @@ export function Dashboard() {
 
   const dueSoon = reminders
     .filter((r) => {
-      const d = new Date(r.due_at);
+      const d = effectiveDueAt(r);
       const now = new Date();
       const week = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       return d >= now && d <= week;
@@ -156,17 +160,48 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <ul className="space-y-2">
-              {dueSoon.map((r) => (
-                <li key={r.id} className="flex items-center justify-between rounded border p-2">
-                  <span>{r.title}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {formatDate(r.due_at)}
-                  </span>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/contacts/${r.contact_id}`}>Kişiye git</Link>
-                  </Button>
-                </li>
-              ))}
+              {dueSoon.map((r) => {
+                const effectiveDue = effectiveDueAt(r);
+                return (
+                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2">
+                    <span>{r.title}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {formatDate(effectiveDue.toISOString())}
+                    </span>
+                    <div className="flex gap-1">
+                      <select
+                        className="h-8 rounded border border-input bg-background px-2 text-xs"
+                        value=""
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (!v) return;
+                          const until = new Date();
+                          if (v === "1h") until.setHours(until.getHours() + 1);
+                          else if (v === "1d") until.setDate(until.getDate() + 1);
+                          else if (v === "7d") until.setDate(until.getDate() + 7);
+                          else if (v === "14d") until.setDate(until.getDate() + 14);
+                          else if (v === "30d") until.setDate(until.getDate() + 30);
+                          api.reminderSnooze(r.id, until.toISOString().slice(0, 19).replace("T", " ")).then(() => {
+                            api.reminderList().then(setReminders).catch(console.error);
+                          }).catch(console.error);
+                          e.target.value = "";
+                        }}
+                        title="D1.3 Snooze"
+                      >
+                        <option value="">Snooze</option>
+                        <option value="1h">1 saat</option>
+                        <option value="1d">1 gün</option>
+                        <option value="7d">7 gün</option>
+                        <option value="14d">14 gün</option>
+                        <option value="30d">30 gün</option>
+                      </select>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/contacts/${r.contact_id}`}>Kişiye git</Link>
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </CardContent>
         </Card>

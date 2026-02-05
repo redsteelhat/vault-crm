@@ -104,6 +104,8 @@ export function ContactDetail() {
   const [formNotesPreview, setFormNotesPreview] = useState(false);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDays, setReminderDays] = useState(14);
+  const [reminderDueDateTime, setReminderDueDateTime] = useState("");
+  const [reminderRecurringDays, setReminderRecurringDays] = useState(0);
   const [interactionKind, setInteractionKind] = useState<"meeting" | "call" | "email" | "dm">("meeting");
   const [interactionDate, setInteractionDate] = useState(() =>
     new Date().toISOString().slice(0, 16)
@@ -272,18 +274,24 @@ export function ContactDetail() {
 
   const addReminder = () => {
     if (!id || !reminderTitle.trim()) return;
-    const d = new Date();
-    d.setDate(d.getDate() + reminderDays);
-    const dueAt = d.toISOString().slice(0, 19).replace("T", " ");
+    const dueAt = reminderDueDateTime.trim()
+      ? new Date(reminderDueDateTime.trim()).toISOString().slice(0, 19).replace("T", " ")
+      : (() => {
+          const d = new Date();
+          d.setDate(d.getDate() + reminderDays);
+          return d.toISOString().slice(0, 19).replace("T", " ");
+        })();
     api
       .reminderCreate({
         contact_id: id,
         title: reminderTitle.trim(),
         due_at: dueAt,
-        recurring_days: null,
+        recurring_days: reminderRecurringDays > 0 ? reminderRecurringDays : null,
       })
       .then(() => {
         setReminderTitle("");
+        setReminderDueDateTime("");
+        setReminderRecurringDays(0);
         load();
       })
       .catch(console.error);
@@ -291,6 +299,11 @@ export function ContactDetail() {
 
   const completeReminder = (reminderId: string) => {
     api.reminderComplete(reminderId).then(load).catch(console.error);
+  };
+
+  const snoozeReminder = (reminderId: string, until: Date) => {
+    const untilStr = until.toISOString().slice(0, 19).replace("T", " ");
+    api.reminderSnooze(reminderId, untilStr).then(load).catch(console.error);
   };
 
   const addAttachment = async () => {
@@ -950,15 +963,26 @@ export function ContactDetail() {
           <Card>
             <CardHeader className="flex flex-row items-center gap-2">
               <Bell className="h-4 w-4" />
-              <CardTitle className="text-base">Hatırlatıcı</CardTitle>
+              <CardTitle className="text-base">Next action (D1.2)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <div className="flex gap-2">
+              <p className="text-xs text-muted-foreground">
+                Her kişi için tek next action + tarih/saat; bildirim bu tarihte (D1.1)
+              </p>
+              <div className="flex flex-wrap gap-2">
                 <Input
                   placeholder="Örn: Follow-up"
                   value={reminderTitle}
                   onChange={(e) => setReminderTitle(e.target.value)}
+                  className="min-w-[140px]"
                 />
+                <Input
+                  type="datetime-local"
+                  value={reminderDueDateTime}
+                  onChange={(e) => setReminderDueDateTime(e.target.value)}
+                  className="min-w-[180px]"
+                />
+                <span className="self-center text-sm text-muted-foreground">veya</span>
                 <select
                   value={reminderDays}
                   onChange={(e) => setReminderDays(Number(e.target.value))}
@@ -967,6 +991,17 @@ export function ContactDetail() {
                   <option value={7}>7 gün</option>
                   <option value={14}>14 gün</option>
                   <option value={30}>30 gün</option>
+                </select>
+                <select
+                  value={reminderRecurringDays}
+                  onChange={(e) => setReminderRecurringDays(Number(e.target.value))}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  title="D1.4 Her X günde bir"
+                >
+                  <option value={0}>Tekrarsız</option>
+                  <option value={7}>Her 7 günde bir</option>
+                  <option value={14}>Her 14 günde bir</option>
+                  <option value={30}>Her 30 günde bir</option>
                 </select>
               </div>
               <Button onClick={addReminder} disabled={!reminderTitle.trim()}>
@@ -1044,25 +1079,63 @@ export function ContactDetail() {
       {reminders.length > 0 && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle className="text-base">Hatırlatıcılar</CardTitle>
+            <CardTitle className="text-base">Hatırlatıcılar (Next action)</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="space-y-2">
-              {reminders.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex items-center justify-between rounded border p-2"
-                >
-                  <span>{r.title} — {formatDate(r.due_at)}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => completeReminder(r.id)}
+              {reminders.map((r) => {
+                const effectiveDue = r.snooze_until?.trim()
+                  ? formatDate(r.snooze_until)
+                  : formatDate(r.due_at);
+                return (
+                  <li
+                    key={r.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded border p-2"
                   >
-                    Tamamla
-                  </Button>
-                </li>
-              ))}
+                    <span className="min-w-0">
+                      {r.title} — {effectiveDue}
+                      {r.recurring_days != null && r.recurring_days > 0 && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          (her {r.recurring_days} gün)
+                        </span>
+                      )}
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      <select
+                        className="h-8 rounded border border-input bg-background px-2 text-xs"
+                        value=""
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (!v) return;
+                          const until = new Date();
+                          if (v === "1h") until.setHours(until.getHours() + 1);
+                          else if (v === "1d") until.setDate(until.getDate() + 1);
+                          else if (v === "7d") until.setDate(until.getDate() + 7);
+                          else if (v === "14d") until.setDate(until.getDate() + 14);
+                          else if (v === "30d") until.setDate(until.getDate() + 30);
+                          snoozeReminder(r.id, until);
+                          e.target.value = "";
+                        }}
+                        title="D1.3 Snooze"
+                      >
+                        <option value="">Snooze</option>
+                        <option value="1h">1 saat</option>
+                        <option value="1d">1 gün</option>
+                        <option value="7d">7 gün</option>
+                        <option value="14d">14 gün</option>
+                        <option value="30d">30 gün</option>
+                      </select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => completeReminder(r.id)}
+                      >
+                        Tamamla
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </CardContent>
         </Card>

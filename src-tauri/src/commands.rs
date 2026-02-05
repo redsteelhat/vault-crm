@@ -1052,10 +1052,39 @@ pub fn reminder_create(db: State<DbState>, input: CreateReminderInput) -> Result
 #[tauri::command]
 pub fn reminder_complete(db: State<DbState>, id: String) -> Result<(), String> {
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn_guard.as_mut().ok_or("DB not initialized")?;
+    // D1.4: Get reminder for recurring before completing
+    let row = conn
+        .query_row(
+            "SELECT contact_id, note_id, title, recurring_days FROM reminders WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<i64>>(3)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
     conn.execute("UPDATE reminders SET completed_at = ?1 WHERE id = ?2", params![now, id])
         .map_err(|e| e.to_string())?;
+    // D1.4: "Her X günde bir" — create next reminder if recurring_days set
+    if let Some((contact_id, note_id, title, Some(recurring_days))) = row {
+        if recurring_days > 0 {
+            let next_id = Uuid::new_v4().to_string();
+            let mut due = Utc::now();
+            due = due + chrono::Duration::days(recurring_days);
+            let due_at = due.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+            let _ = conn.execute(
+                "INSERT INTO reminders (id, contact_id, note_id, title, due_at, recurring_days, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![next_id, contact_id, note_id, title, due_at, recurring_days, now],
+            );
+        }
+    }
     Ok(())
 }
 
