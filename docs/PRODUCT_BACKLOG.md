@@ -84,9 +84,9 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### C1 — Markdown ve şablonlar
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| C1.1 | Markdown destekli notlar | Kişi/şirket notları ve timeline notları Markdown; önizleme (preview) | ☐ |
-| C1.2 | Not şablonları | “Meeting Notes”, “Follow-up”, “Intro”, “Intro requested”, “Send deck”, “Follow-up in X days” | ☐ |
-| C1.3 | Hızlı aksiyonlar | Şablondan not açılınca otomatik “X gün sonra hatırlat” seçeneği | ☐ |
+| C1.1 | Markdown destekli notlar | Kişi/şirket notları ve timeline notları Markdown; önizleme (preview) | ☑ |
+| C1.2 | Not şablonları | “Meeting Notes”, “Follow-up”, “Intro”, “Intro requested”, “Send deck”, “Follow-up in X days” | ☑ |
+| C1.3 | Hızlı aksiyonlar | Şablondan not açılınca otomatik “X gün sonra hatırlat” seçeneği | ☑ |
 
 ### C2 — Arama ve mention
 | # | Özellik | Detay / Kriter | Todo |

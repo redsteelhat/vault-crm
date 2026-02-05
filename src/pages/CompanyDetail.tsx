@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Pencil, Save, X, User } from "lucide-react";
 import { DomainAvatar } from "@/components/DomainAvatar";
+import { MarkdownView } from "@/components/MarkdownView";
 import { open } from "@tauri-apps/plugin-shell";
 
 export function CompanyDetail() {
@@ -22,6 +23,7 @@ export function CompanyDetail() {
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [attachUploading, setAttachUploading] = useState(false);
+  const [notesPreview, setNotesPreview] = useState(false);
 
   const load = () => {
     const rawId = id?.trim();
@@ -189,13 +191,29 @@ export function CompanyDetail() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Notlar (Markdown)</Label>
-                  <Textarea
-                    value={form.notes}
-                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                    placeholder="Şirket notları…"
-                    rows={3}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Label>Notlar (Markdown)</Label>
+                    <Button
+                      type="button"
+                      variant={notesPreview ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => setNotesPreview((p) => !p)}
+                    >
+                      {notesPreview ? "Düzenle" : "Önizleme"}
+                    </Button>
+                  </div>
+                  {notesPreview ? (
+                    <div className="rounded border border-input bg-muted/30 p-3 min-h-[80px]">
+                      <MarkdownView source={form.notes} />
+                    </div>
+                  ) : (
+                    <Textarea
+                      value={form.notes}
+                      onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                      placeholder="Şirket notları…"
+                      rows={3}
+                    />
+                  )}
                 </div>
               </div>
             ) : (
@@ -203,8 +221,8 @@ export function CompanyDetail() {
                 {company.domain && <p>Domain: {company.domain}</p>}
                 {company.industry && <p>Sektör: {company.industry}</p>}
                 {company.notes && (
-                  <div className="mt-2 rounded border p-2 text-muted-foreground whitespace-pre-wrap">
-                    {company.notes}
+                  <div className="mt-2 rounded border p-2 text-muted-foreground">
+                    <MarkdownView source={company.notes} />
                   </div>
                 )}
               </div>

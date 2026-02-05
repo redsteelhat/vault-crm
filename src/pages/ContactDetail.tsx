@@ -18,6 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, StickyNote, Bell, Pencil, Save, X, Calendar, Phone, Mail, MessageCircle } from "lucide-react";
 import { open } from "@tauri-apps/plugin-shell";
 import { getRelationshipHealth, HEALTH_COLORS, type HealthStatus } from "@/lib/relationshipHealth";
+import { MarkdownView } from "@/components/MarkdownView";
+import { NOTE_TEMPLATES, getTemplateById } from "@/lib/noteTemplates";
 
 function formatDate(s: string | null) {
   if (!s) return "—";
@@ -96,6 +98,10 @@ export function ContactDetail() {
   const [editing, setEditing] = useState(false);
   const [noteBody, setNoteBody] = useState("");
   const [noteKind, setNoteKind] = useState("note");
+  const [notePreview, setNotePreview] = useState(false);
+  const [noteTemplateId, setNoteTemplateId] = useState("");
+  const [noteReminderDays, setNoteReminderDays] = useState(0);
+  const [formNotesPreview, setFormNotesPreview] = useState(false);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDays, setReminderDays] = useState(14);
   const [interactionKind, setInteractionKind] = useState<"meeting" | "call" | "email" | "dm">("meeting");
@@ -183,17 +189,43 @@ export function ContactDetail() {
 
   const addNote = () => {
     if (!id || !noteBody.trim()) return;
+    const reminderDays = noteReminderDays;
     api
       .noteCreate({
         contact_id: id,
         kind: noteKind,
         body: noteBody.trim(),
       })
+      .then((created) => {
+        if (reminderDays > 0 && id) {
+          const d = new Date();
+          d.setDate(d.getDate() + reminderDays);
+          return api.reminderCreate({
+            contact_id: id,
+            note_id: created.id,
+            title: "Not hatırlatıcı",
+            due_at: d.toISOString().slice(0, 19).replace("T", " "),
+            recurring_days: null,
+          });
+        }
+      })
       .then(() => {
         setNoteBody("");
+        setNoteReminderDays(0);
+        setNoteTemplateId("");
         load();
       })
       .catch(console.error);
+  };
+
+  const applyNoteTemplate = (templateId: string) => {
+    setNoteTemplateId(templateId);
+    const t = getTemplateById(templateId);
+    if (t) {
+      setNoteKind(t.kind);
+      setNoteBody(t.body);
+      setNoteReminderDays(t.reminderDays ?? 0);
+    }
   };
 
   const addInteraction = () => {
@@ -572,13 +604,29 @@ export function ContactDetail() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Notlar (Markdown destekli)</Label>
-                  <Textarea
-                    value={form.notes}
-                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                    placeholder="Kişiye özel notlar…"
-                    rows={3}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Label>Notlar (Markdown destekli)</Label>
+                    <Button
+                      type="button"
+                      variant={formNotesPreview ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => setFormNotesPreview((p) => !p)}
+                    >
+                      {formNotesPreview ? "Düzenle" : "Önizleme"}
+                    </Button>
+                  </div>
+                  {formNotesPreview ? (
+                    <div className="rounded border border-input bg-muted/30 p-3 min-h-[80px]">
+                      <MarkdownView source={form.notes ?? ""} />
+                    </div>
+                  ) : (
+                    <Textarea
+                      value={form.notes}
+                      onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                      placeholder="Kişiye özel notlar…"
+                      rows={3}
+                    />
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Sonraki temas (Next touch)</Label>
@@ -730,8 +778,8 @@ export function ContactDetail() {
                   {formatDate(contact.next_touch_at)}
                 </p>
                 {contact.notes && (
-                  <div className="mt-2 rounded border p-2 text-muted-foreground whitespace-pre-wrap">
-                    {contact.notes}
+                  <div className="mt-2 rounded border p-2 text-muted-foreground">
+                    <MarkdownView source={contact.notes} />
                   </div>
                 )}
                 {customValues.length > 0 && (
@@ -768,7 +816,19 @@ export function ContactDetail() {
               <CardTitle className="text-base">Not ekle</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
+                <select
+                  value={noteTemplateId}
+                  onChange={(e) => applyNoteTemplate(e.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Şablon seç (C1.2)</option>
+                  {NOTE_TEMPLATES.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
                 <select
                   value={noteKind}
                   onChange={(e) => setNoteKind(e.target.value)}
@@ -780,17 +840,45 @@ export function ContactDetail() {
                     </option>
                   ))}
                 </select>
+                <Button
+                  type="button"
+                  variant={notePreview ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => setNotePreview((p) => !p)}
+                >
+                  {notePreview ? "Düzenle" : "Önizleme"}
+                </Button>
+              </div>
+              {notePreview ? (
+                <div className="rounded border border-input bg-muted/30 p-3 min-h-[80px]">
+                  <MarkdownView source={noteBody} />
+                </div>
+              ) : (
                 <Textarea
                   placeholder="Not içeriği (Markdown desteklenir)…"
                   value={noteBody}
                   onChange={(e) => setNoteBody(e.target.value)}
-                  rows={2}
+                  rows={4}
                   className="flex-1"
                 />
+              )}
+              <div className="flex flex-wrap gap-2 items-center">
+                <Label className="text-xs">C1.3 X gün sonra hatırlat</Label>
+                <select
+                  value={noteReminderDays}
+                  onChange={(e) => setNoteReminderDays(Number(e.target.value))}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value={0}>Yok</option>
+                  <option value={3}>3 gün</option>
+                  <option value={7}>7 gün</option>
+                  <option value={14}>14 gün</option>
+                  <option value={30}>30 gün</option>
+                </select>
+                <Button onClick={addNote} disabled={!noteBody.trim()}>
+                  Kaydet
+                </Button>
               </div>
-              <Button onClick={addNote} disabled={!noteBody.trim()}>
-                Kaydet
-              </Button>
             </CardContent>
           </Card>
 
@@ -943,7 +1031,9 @@ export function ContactDetail() {
                 <li key={n.id} className="rounded border p-3 text-sm">
                   <span className="text-muted-foreground">{n.kind}</span> ·{" "}
                   {formatDate(n.created_at)}
-                  <pre className="mt-1 whitespace-pre-wrap font-sans">{n.body}</pre>
+                  <div className="mt-1">
+                    <MarkdownView source={n.body} />
+                  </div>
                 </li>
               ))}
             </ul>

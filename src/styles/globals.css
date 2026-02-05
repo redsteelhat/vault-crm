@@ -78,3 +78,18 @@
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }
+
+/* C1.1 — Markdown önizleme stilleri */
+.markdown-view p { margin-bottom: 0.5em; }
+.markdown-view p:last-child { margin-bottom: 0; }
+.markdown-view h1 { font-size: 1.25rem; font-weight: 600; margin-top: 0.75em; margin-bottom: 0.25em; }
+.markdown-view h2 { font-size: 1.125rem; font-weight: 600; margin-top: 0.5em; margin-bottom: 0.25em; }
+.markdown-view h3 { font-size: 1rem; font-weight: 600; margin-top: 0.5em; margin-bottom: 0.25em; }
+.markdown-view ul, .markdown-view ol { margin-left: 1.25rem; margin-bottom: 0.5em; }
+.markdown-view li { margin-bottom: 0.25em; }
+.markdown-view code { font-size: 0.875em; padding: 0.125em 0.25em; border-radius: 4px; background: hsl(var(--muted)); }
+.markdown-view pre { overflow-x: auto; padding: 0.5em; border-radius: 4px; background: hsl(var(--muted)); margin-bottom: 0.5em; }
+.markdown-view pre code { padding: 0; background: transparent; }
+.markdown-view strong { font-weight: 600; }
+.markdown-view a { color: hsl(var(--primary)); text-decoration: underline; }
+.markdown-view blockquote { border-left: 3px solid hsl(var(--border)); padding-left: 0.75em; margin: 0.5em 0; color: hsl(var(--muted-foreground)); }
