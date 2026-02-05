@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type Contact, type Reminder, type CustomField } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Bell, UserPlus } from "lucide-react";
+import { Users, Bell, UserPlus, Calendar, UserX, UserCheck } from "lucide-react";
 
 function effectiveDueAt(r: Reminder): Date {
   return r.snooze_until?.trim() ? new Date(r.snooze_until) : new Date(r.due_at);
@@ -102,6 +102,31 @@ export function Dashboard() {
     })
     .slice(0, 5);
 
+  // E2.1: Next touch bu hafta olan kişiler
+  const now = new Date();
+  const weekMon = new Date(now);
+  weekMon.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
+  weekMon.setHours(0, 0, 0, 0);
+  const weekSun = new Date(weekMon);
+  weekSun.setDate(weekMon.getDate() + 6);
+  weekSun.setHours(23, 59, 59, 999);
+  const nextTouchThisWeek = contacts.filter((c) => {
+    const nt = c.next_touch_at ? new Date(c.next_touch_at) : null;
+    return nt != null && nt >= weekMon && nt <= weekSun;
+  });
+
+  // E2.2: Last touched > 30 gün (veya hiç dokunulmamış)
+  const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const lastTouched30Plus = contacts.filter((c) => {
+    const lt = c.last_touched_at ? new Date(c.last_touched_at).getTime() : 0;
+    return lt === 0 || lt <= cutoff30;
+  });
+
+  // E2.3: Son X günde eklenen kişiler (X = 7)
+  const createdWithinDays = 7;
+  const createdCutoff = Date.now() - createdWithinDays * 24 * 60 * 60 * 1000;
+  const recentlyCreated = contacts.filter((c) => new Date(c.created_at).getTime() >= createdCutoff);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center p-8">
@@ -153,10 +178,75 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+      {/* E2: Genişletilebilir widget'lar — E2.1, E2.2, E2.3, E2.4 (stage/tag ileride eklenebilir) */}
+      <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* E2.1: Bu hafta temas edilmesi gerekenler (next touch bu hafta) */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Bu hafta temas edilmesi gerekenler (E2.1)
+            </CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{nextTouchThisWeek.length}</p>
+            <p className="text-xs text-muted-foreground">Next touch bu hafta olan kişiler</p>
+            <Button variant="link" className="mt-2 h-auto p-0" asChild>
+              <Link to="/contacts?touch=next_this_week">Tümünü gör →</Link>
+            </Button>
+            {nextTouchThisWeek.length > 0 && nextTouchThisWeek.length <= 5 && (
+              <ul className="mt-2 space-y-1 text-sm">
+                {nextTouchThisWeek.map((c) => (
+                  <li key={c.id}>
+                    <Link to={`/contacts/${c.id}`} className="text-primary hover:underline">
+                      {c.first_name} {c.last_name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* E2.2: 30+ gündür dokunmadıkların */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              30+ gündür dokunmadıkların (E2.2)
+            </CardTitle>
+            <UserX className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{lastTouched30Plus.length}</p>
+            <p className="text-xs text-muted-foreground">Last touched &gt; 30 gün</p>
+            <Button variant="link" className="mt-2 h-auto p-0" asChild>
+              <Link to="/contacts?touch=last_30_plus">Tümünü gör →</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* E2.3: Yeni import edilenler */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Yeni import edilenler (E2.3)
+            </CardTitle>
+            <UserCheck className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{recentlyCreated.length}</p>
+            <p className="text-xs text-muted-foreground">Son {createdWithinDays} günde eklenen</p>
+            <Button variant="link" className="mt-2 h-auto p-0" asChild>
+              <Link to={`/contacts?createdWithin=${createdWithinDays}`}>Tümünü gör →</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
       {dueSoon.length > 0 && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Bu hafta temas edilmesi gerekenler</CardTitle>
+            <CardTitle>Bu hafta hatırlatıcılar (next action)</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="space-y-2">
@@ -206,10 +296,11 @@ export function Dashboard() {
           </CardContent>
         </Card>
       )}
+      {/* E2.4: Genişletilebilir — stage pipeline, tag dağılımı vb. ileride eklenebilir */}
       {stageStats.length > 0 && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Stage dağılımı (A3)</CardTitle>
+            <CardTitle>Stage dağılımı (A3 / E2.4 widget)</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="space-y-2 text-sm">

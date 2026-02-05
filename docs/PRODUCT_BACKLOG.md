@@ -128,10 +128,10 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### E2 — Dashboard
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| E2.1 | “Bu hafta temas edilmesi gerekenler” | Next touch bu hafta olan kişiler | ☐ |
-| E2.2 | “30+ gündür dokunmadıkların” | Last touched > 30 gün | ☐ |
-| E2.3 | “Yeni import edilenler” | Son X günde eklenen kişiler | ☐ |
-| E2.4 | Genişletilebilir widget’lar | İleride ek widget (örn. tag dağılımı, stage pipeline) | ☐ |
+| E2.1 | “Bu hafta temas edilmesi gerekenler” | Next touch bu hafta olan kişiler | ☑ |
+| E2.2 | “30+ gündür dokunmadıkların” | Last touched > 30 gün | ☑ |
+| E2.3 | “Yeni import edilenler” | Son X günde eklenen kişiler | ☑ |
+| E2.4 | Genişletilebilir widget’lar | İleride ek widget (örn. tag dağılımı, stage pipeline) | ☑ |
 
 ### E3 — Export (data portability)
 | # | Özellik | Detay / Kriter | Todo |

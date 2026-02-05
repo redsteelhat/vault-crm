@@ -48,11 +48,18 @@ function isValidPhone(v: string): boolean {
 }
 
 export function Contacts() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const hashtagParam = searchParams.get("hashtag");
+  const touchParam = searchParams.get("touch") as "" | "next_this_week" | "last_30_plus" | null;
+  const createdWithinParam = searchParams.get("createdWithin"); // E2.3: son X gün
+
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [search, setSearch] = useState("");
-  const [touchFilter, setTouchFilter] = useState<"" | "next_this_week" | "last_30_plus">("");
+  const [touchFilter, setTouchFilter] = useState<"" | "next_this_week" | "last_30_plus">(
+    touchParam === "next_this_week" || touchParam === "last_30_plus" ? touchParam : ""
+  );
   const [fieldFilterId, setFieldFilterId] = useState<string>("");
   const [fieldFilterValue, setFieldFilterValue] = useState<string>("");
   const [fieldFilterIds, setFieldFilterIds] = useState<Set<string> | null>(null);
@@ -62,9 +69,6 @@ export function Contacts() {
   const [filterMode, setFilterMode] = useState<"and" | "or">("and");
   const [savedViews, setSavedViews] = useState<SavedView[]>(() => getSavedViews());
   const [loading, setLoading] = useState(true);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const hashtagParam = searchParams.get("hashtag");
-  // setSearchParams used by applySavedView (E1.3)
   const [showAdd, setShowAdd] = useState(false);
   const [showSavedViews, setShowSavedViews] = useState(false);
   const [saveViewName, setSaveViewName] = useState("");
@@ -140,6 +144,11 @@ export function Contacts() {
   }, [fieldFilterId, fieldFilterValue]);
 
   useEffect(() => {
+    if (touchParam === "next_this_week" || touchParam === "last_30_plus") setTouchFilter(touchParam);
+    else if (touchParam === null) setTouchFilter("");
+  }, [touchParam]);
+
+  useEffect(() => {
     if (!showSavedViews) return;
     const onDocClick = (e: MouseEvent) => {
       if (savedViewsRef.current && !savedViewsRef.current.contains(e.target as Node))
@@ -190,6 +199,12 @@ export function Contacts() {
   nextWeekSun.setDate(nextWeekMon.getDate() + 6);
   nextWeekSun.setHours(23, 59, 59, 999);
   const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const createdWithinDays = createdWithinParam
+    ? Math.max(1, parseInt(createdWithinParam, 10) || 7)
+    : 0;
+  const createdCutoff = createdWithinDays > 0
+    ? Date.now() - createdWithinDays * 24 * 60 * 60 * 1000
+    : 0;
 
   let filtered: typeof contactsList;
   if (filterMode === "or") {
@@ -220,12 +235,17 @@ export function Contacts() {
       contactsList.forEach((c) => {
         if ((c.city ?? "").toLowerCase().includes(cityLower)) anyIds.add(c.id);
       });
+    if (createdWithinDays > 0)
+      contactsList.forEach((c) => {
+        if (new Date(c.created_at).getTime() >= createdCutoff) anyIds.add(c.id);
+      });
     if (
       !search.trim() &&
       !fieldFilterIds?.size &&
       !hashtagFilterIds?.size &&
       !touchFilter &&
-      !cityLower
+      !cityLower &&
+      !createdWithinDays
     )
       filtered = contactsList;
     else filtered = contactsList.filter((c) => anyIds.has(c.id));
@@ -256,6 +276,9 @@ export function Contacts() {
     if (cityLower)
       filtered = filtered.filter((c) => (c.city ?? "").toLowerCase().includes(cityLower));
   }
+  // E2.3: Son X günde eklenen kişiler (URL ?createdWithin=7)
+  if (createdWithinDays > 0)
+    filtered = filtered.filter((c) => new Date(c.created_at).getTime() >= createdCutoff);
 
   const applySavedView = (v: SavedView) => {
     setSearch(v.filters.search);
