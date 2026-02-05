@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
+  Inbox,
   Users,
   Building2,
   Upload,
@@ -11,6 +12,7 @@ import {
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/inbox", label: "Inbox (Next action)", icon: Inbox },
   { to: "/contacts", label: "Kişiler", icon: Users },
   { to: "/companies", label: "Şirketler", icon: Building2 },
   { to: "/dedup", label: "Duplikatlar", icon: GitMerge },

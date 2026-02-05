@@ -110,9 +110,9 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### D2 — Inbox ve review
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| D2.1 | “Next action required” inbox | Tüm kişilerin bugün/bu hafta next action’ları tek listede | ☐ |
+| D2.1 | “Next action required” inbox | Tüm kişilerin bugün/bu hafta next action’ları tek listede | ☑ |
 | D2.2 | Günlük/haftalık review ekranı | “Bugün yapılacaklar”, “Bu hafta pipeline review”; tamamen local | ☑ |
-| D2.3 | Tamamlandı işaretleme | Action tamamlandı → “Last touched” güncellenir, next action temizlenir veya yeni tarih | ☐ |
+| D2.3 | Tamamlandı işaretleme | Action tamamlandı → “Last touched” güncellenir, next action temizlenir veya yeni tarih | ☑ |
 
 ---
 

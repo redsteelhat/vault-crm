@@ -1054,7 +1054,7 @@ pub fn reminder_complete(db: State<DbState>, id: String) -> Result<(), String> {
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let mut conn_guard = db.0.lock().map_err(|e| e.to_string())?;
     let conn = conn_guard.as_mut().ok_or("DB not initialized")?;
-    // D1.4: Get reminder for recurring before completing
+    // Get reminder for recurring and contact_id (D2.3: update contact last_touched_at / next_touch_at)
     let row = conn
         .query_row(
             "SELECT contact_id, note_id, title, recurring_days FROM reminders WHERE id = ?1",
@@ -1070,10 +1070,23 @@ pub fn reminder_complete(db: State<DbState>, id: String) -> Result<(), String> {
         )
         .optional()
         .map_err(|e| e.to_string())?;
+
+    let contact_id: Option<String> = row.as_ref().map(|r| r.0.clone());
+
     conn.execute("UPDATE reminders SET completed_at = ?1 WHERE id = ?2", params![now, id])
         .map_err(|e| e.to_string())?;
+
+    // D2.3: Action tamamlandı → Last touched güncellenir
+    if let Some(ref cid) = contact_id {
+        conn.execute(
+            "UPDATE contacts SET last_touched_at = ?1, updated_at = ?1 WHERE id = ?2",
+            params![now, cid],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
     // D1.4: "Her X günde bir" — create next reminder if recurring_days set
-    if let Some((contact_id, note_id, title, Some(recurring_days))) = row {
+    let next_due_at: Option<String> = if let Some((contact_id, note_id, title, Some(recurring_days))) = row {
         if recurring_days > 0 {
             let next_id = Uuid::new_v4().to_string();
             let mut due = Utc::now();
@@ -1083,8 +1096,24 @@ pub fn reminder_complete(db: State<DbState>, id: String) -> Result<(), String> {
                 "INSERT INTO reminders (id, contact_id, note_id, title, due_at, recurring_days, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![next_id, contact_id, note_id, title, due_at, recurring_days, now],
             );
+            Some(due_at)
+        } else {
+            None
         }
+    } else {
+        None
+    };
+
+    // D2.3: next action temizlenir veya yeni tarih (recurring ise next_touch_at = yeni due_at)
+    if let Some(ref cid) = contact_id {
+        let next_touch: Option<&str> = next_due_at.as_deref();
+        conn.execute(
+            "UPDATE contacts SET next_touch_at = ?1, updated_at = ?2 WHERE id = ?3",
+            params![next_touch, now, cid],
+        )
+        .map_err(|e| e.to_string())?;
     }
+
     Ok(())
 }
 

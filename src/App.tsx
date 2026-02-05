@@ -9,6 +9,7 @@ import { CompanyDetail } from "@/pages/CompanyDetail";
 import { Settings } from "@/pages/Settings";
 import { Import } from "@/pages/Import";
 import { Dedup } from "@/pages/Dedup";
+import { Inbox } from "@/pages/Inbox";
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
       <ErrorBoundary>
         <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/inbox" element={<Inbox />} />
         <Route path="/contacts" element={<Contacts />} />
         <Route path="/contacts/:id" element={<ContactDetail />} />
         <Route path="/companies" element={<Companies />} />
