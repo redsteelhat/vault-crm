@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { api, type Company, type Contact } from "@/lib/api";
+import { api, type Company, type Contact, type Attachment } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Pencil, Save, X, User } from "lucide-react";
 import { DomainAvatar } from "@/components/DomainAvatar";
+import { open } from "@tauri-apps/plugin-shell";
 
 export function CompanyDetail() {
   const { id } = useParams<{ id: string }>();
@@ -17,23 +18,41 @@ export function CompanyDetail() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: "", domain: "", industry: "", notes: "" });
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachUploading, setAttachUploading] = useState(false);
 
   const load = () => {
-    if (!id) return;
-    Promise.all([api.companyGet(id), api.contactListByCompany(id)])
-      .then(([c, list]) => {
-        setCompany(c ?? null);
-        setContacts(list ?? []);
-        if (c) {
-          setForm({
-            name: c.name ?? "",
-            domain: c.domain ?? "",
-            industry: c.industry ?? "",
-            notes: c.notes ?? "",
-          });
+    const rawId = id?.trim();
+    if (!rawId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    Promise.all([api.companyGet(rawId), api.contactListByCompany(rawId), api.attachmentList("company", rawId)])
+      .then(([c, list, at]) => {
+        try {
+          setCompany(c ?? null);
+          setContacts(Array.isArray(list) ? list : []);
+          setAttachments(Array.isArray(at) ? at : []);
+          if (c && typeof c === "object") {
+            setForm({
+              name: c.name ?? "",
+              domain: c.domain ?? "",
+              industry: c.industry ?? "",
+              notes: c.notes ?? "",
+            });
+          }
+        } catch (e) {
+          console.error(e);
+          setCompany(null);
         }
       })
-      .catch(console.error)
+      .catch((e) => {
+        console.error(e);
+        setCompany(null);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -57,12 +76,53 @@ export function CompanyDetail() {
       .catch(console.error);
   };
 
+  const addAttachment = async () => {
+    if (!id || !attachFile) return;
+    setAttachUploading(true);
+    setAttachError(null);
+    try {
+      const buffer = await attachFile.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+      await api.attachmentAdd({
+        owner_type: "company",
+        owner_id: id,
+        file_name: attachFile.name,
+        mime: attachFile.type || null,
+        bytes,
+      });
+      setAttachFile(null);
+      load();
+    } catch (e) {
+      setAttachError(String(e));
+    } finally {
+      setAttachUploading(false);
+    }
+  };
+
+  const openAttachment = (att: Attachment) => {
+    api
+      .attachmentOpen(att.id)
+      .then((path) => open(path))
+      .catch(console.error);
+  };
+
+  const deleteAttachment = (att: Attachment) => {
+    api.attachmentDelete(att.id).then(load).catch(console.error);
+  };
+
   if (loading || !company) {
     return (
-      <div className="flex h-full items-center justify-center p-8">
-        <p className="text-muted-foreground">
-          {loading ? "Yükleniyor…" : "Şirket bulunamadı."}
-        </p>
+      <div className="flex min-h-[50vh] w-full items-center justify-center p-8">
+        <div className="text-center">
+          <p className="text-muted-foreground">
+            {loading ? "Yükleniyor…" : id ? "Şirket bulunamadı." : "Geçersiz bağlantı."}
+          </p>
+          {!loading && (
+            <Button variant="outline" className="mt-4" onClick={() => navigate("/companies")}>
+              Şirketler listesine dön
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
@@ -179,6 +239,51 @@ export function CompanyDetail() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">Ek dosyalar (A6)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.ppt,.pptx"
+            onChange={(e) => setAttachFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-sm"
+          />
+          {attachError && (
+            <p className="rounded border border-destructive/50 bg-destructive/10 p-2 text-sm text-destructive">
+              {attachError}
+            </p>
+          )}
+          <Button onClick={addAttachment} disabled={!attachFile || attachUploading}>
+            {attachUploading ? "Yükleniyor…" : "Ekle"}
+          </Button>
+          <ul className="divide-y">
+            {attachments.map((a) => (
+              <li key={a.id} className="flex items-center justify-between py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{a.file_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {a.size != null ? `${(a.size / 1024).toFixed(1)} KB` : "—"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => openAttachment(a)}>
+                    Aç
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => deleteAttachment(a)}>
+                    Sil
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {attachments.length === 0 && (
+            <p className="text-sm text-muted-foreground">Henüz ek dosya yok.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

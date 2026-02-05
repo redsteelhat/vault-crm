@@ -12,6 +12,7 @@ const apiMock = vi.hoisted(() => ({
   contactCustomValuesGet: vi.fn(),
   contactUpdate: vi.fn(),
   contactCustomValuesSet: vi.fn(),
+  attachmentList: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({ api: apiMock }));
@@ -47,6 +48,7 @@ describe("ContactDetail A1 validation", () => {
     apiMock.contactCustomValuesGet.mockResolvedValue([]);
     apiMock.contactUpdate.mockResolvedValue({});
     apiMock.contactCustomValuesSet.mockResolvedValue({});
+    apiMock.attachmentList.mockResolvedValue([]);
   });
 
   it("shows validation errors for invalid email and phone", async () => {

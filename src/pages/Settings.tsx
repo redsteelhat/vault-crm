@@ -5,6 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus } from "lucide-react";
+import {
+  getHealthThresholds,
+  setHealthThresholds,
+  type HealthThresholds,
+} from "@/lib/relationshipHealth";
 
 const FIELD_KINDS = [
   { value: "text", label: "Metin" },
@@ -21,9 +26,24 @@ export function Settings() {
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState("text");
   const [newOptions, setNewOptions] = useState("");
+  const [attachmentsDir, setAttachmentsDir] = useState("");
+  const [attachmentsSaving, setAttachmentsSaving] = useState(false);
+  const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
+  const [healthThresholds, setHealthThresholdsState] = useState<HealthThresholds>(getHealthThresholds());
+  const [healthThresholdsSaving, setHealthThresholdsSaving] = useState(false);
 
   useEffect(() => {
-    api.customFieldList().then(setCustomFields).catch(console.error).finally(() => setLoading(false));
+    setHealthThresholdsState(getHealthThresholds());
+  }, []);
+
+  useEffect(() => {
+    Promise.all([api.customFieldList(), api.attachmentsDirGet()])
+      .then(([fields, dir]) => {
+        setCustomFields(fields);
+        setAttachmentsDir(dir);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
   const addField = () => {
@@ -60,6 +80,130 @@ export function Settings() {
   return (
     <div className="p-6">
       <h1 className="mb-6 text-2xl font-semibold">Ayarlar</h1>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">Attachment klasörü (A6)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label>Depolama yolu</Label>
+            <Input
+              value={attachmentsDir}
+              onChange={(e) => setAttachmentsDir(e.target.value)}
+              placeholder="C:\\Users\\...\\VaultCRM\\attachments"
+            />
+            <p className="text-xs text-muted-foreground">
+              Boş bırakmayın. Varsayılan uygulama veri klasörüdür.
+            </p>
+          </div>
+          {attachmentsError && (
+            <p className="rounded border border-destructive/50 bg-destructive/10 p-2 text-sm text-destructive">
+              {attachmentsError}
+            </p>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={attachmentsSaving || !attachmentsDir.trim()}
+            onClick={() => {
+              setAttachmentsSaving(true);
+              setAttachmentsError(null);
+              api
+                .attachmentsDirSet(attachmentsDir.trim())
+                .catch((e) => setAttachmentsError(String(e)))
+                .finally(() => setAttachmentsSaving(false));
+            }}
+          >
+            {attachmentsSaving ? "Kaydediliyor…" : "Kaydet"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">İlişki sağlığı eşikleri (B3)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Warm / Cooling / Cold göstergesi recency (son temas) ve frequency (son N ayda temas sayısı) ile hesaplanır.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Warm: son X gün içinde</Label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={healthThresholds.warmDays}
+                onChange={(e) =>
+                  setHealthThresholdsState((t) => ({
+                    ...t,
+                    warmDays: Math.max(1, Math.min(365, Number(e.target.value) || 30)),
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Cooling: son Y gün içinde</Label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={healthThresholds.coolingDays}
+                onChange={(e) =>
+                  setHealthThresholdsState((t) => ({
+                    ...t,
+                    coolingDays: Math.max(1, Math.min(365, Number(e.target.value) || 90)),
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Frequency: son Z ay</Label>
+              <Input
+                type="number"
+                min={1}
+                max={24}
+                value={healthThresholds.frequencyMonths}
+                onChange={(e) =>
+                  setHealthThresholdsState((t) => ({
+                    ...t,
+                    frequencyMonths: Math.max(1, Math.min(24, Number(e.target.value) || 6)),
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Warm için en az temas sayısı</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={healthThresholds.minFrequencyForWarm}
+                onChange={(e) =>
+                  setHealthThresholdsState((t) => ({
+                    ...t,
+                    minFrequencyForWarm: Math.max(0, Math.min(100, Number(e.target.value) || 1)),
+                  }))
+                }
+              />
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={healthThresholdsSaving}
+            onClick={() => {
+              setHealthThresholdsSaving(true);
+              setHealthThresholds(healthThresholds);
+              setHealthThresholdsSaving(false);
+            }}
+          >
+            {healthThresholdsSaving ? "Kaydediliyor…" : "Eşikleri kaydet"}
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

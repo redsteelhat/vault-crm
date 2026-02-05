@@ -47,6 +47,35 @@ function reasonLabel(r: string) {
   return r;
 }
 
+function getContactValue(contact: Contact, key: keyof Contact): string | null {
+  switch (key) {
+    case "id":
+    case "first_name":
+    case "last_name":
+    case "created_at":
+    case "updated_at":
+      return contact[key];
+    case "title":
+    case "company":
+    case "company_id":
+    case "city":
+    case "country":
+    case "email":
+    case "email_secondary":
+    case "phone":
+    case "phone_secondary":
+    case "linkedin_url":
+    case "twitter_url":
+    case "website":
+    case "notes":
+    case "last_touched_at":
+    case "next_touch_at":
+      return contact[key] ?? null;
+    default:
+      return null;
+  }
+}
+
 export function Dedup() {
   const [candidates, setCandidates] = useState<DedupCandidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,10 +103,10 @@ export function Dedup() {
   const selectCandidate = (c: DedupCandidate) => {
     setSelected(c);
     setKeep("a");
-    const initial: Record<string, "a" | "b"> = {};
+      const initial: Record<string, "a" | "b"> = {};
     CONTACT_FIELDS.forEach(({ key }) => {
-      const aVal = String((c.a as Record<string, string | null>)[key] ?? "").trim();
-      const bVal = String((c.b as Record<string, string | null>)[key] ?? "").trim();
+      const aVal = String(getContactValue(c.a, key) ?? "").trim();
+      const bVal = String(getContactValue(c.b, key) ?? "").trim();
       initial[key] = aVal ? "a" : bVal ? "b" : "a";
     });
     setFieldChoice(initial);
@@ -124,7 +153,7 @@ export function Dedup() {
     const secondary = keep === "a" ? selected.b : selected.a;
     const pick = (key: keyof Contact) => {
       const source = fieldChoice[key] === "b" ? selected.b : selected.a;
-      return (source as Record<string, string | null | undefined>)[key] ?? null;
+      return getContactValue(source, key);
     };
     const toMaybe = (value: string | null | undefined) => {
       const v = String(value ?? "").trim();
@@ -269,7 +298,7 @@ export function Dedup() {
                       checked={fieldChoice[key] === "a"}
                       onChange={() => setFieldChoice((f) => ({ ...f, [key]: "a" }))}
                     />
-                    <span>{displayValue((selected.a as Record<string, string | null>)[key])}</span>
+                    <span>{displayValue(getContactValue(selected.a, key))}</span>
                   </label>
                   <label className="flex items-center gap-2">
                     <input
@@ -277,7 +306,7 @@ export function Dedup() {
                       checked={fieldChoice[key] === "b"}
                       onChange={() => setFieldChoice((f) => ({ ...f, [key]: "b" }))}
                     />
-                    <span>{displayValue((selected.b as Record<string, string | null>)[key])}</span>
+                    <span>{displayValue(getContactValue(selected.b, key))}</span>
                   </label>
                 </div>
               ))}

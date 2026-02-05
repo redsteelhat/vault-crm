@@ -8,6 +8,7 @@ const apiMock = vi.hoisted(() => ({
   companyGet: vi.fn(),
   contactListByCompany: vi.fn(),
   companyUpdate: vi.fn(),
+  attachmentList: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({ api: apiMock }));
@@ -49,6 +50,7 @@ describe("CompanyDetail A2", () => {
       },
     ]);
     apiMock.companyUpdate.mockResolvedValue({});
+    apiMock.attachmentList.mockResolvedValue([]);
   });
 
   it("shows contacts list with link", async () => {

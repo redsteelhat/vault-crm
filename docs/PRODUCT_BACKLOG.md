@@ -27,9 +27,9 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### A3 — Özel alanlar (Custom fields)
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| A3.1 | Tanımlanabilir alanlar | Kullanıcı yeni alan ekleyebilir: metin, sayı, tarih, tek seçim, çoklu seçim | ☐ |
-| A3.2 | Hazır “hissiyat” alanları | “Warmth score” (1–5 veya benzeri), “Source”, “Stage” — varsayılan şablon olarak sunulabilir | ☐ |
-| A3.3 | Filtre/raporlama | Özel alanlara göre filtre ve dashboard’da kullanım | ☐ |
+| A3.1 | Tanımlanabilir alanlar | Kullanıcı yeni alan ekleyebilir: metin, sayı, tarih, tek seçim, çoklu seçim | ☑ |
+| A3.2 | Hazır “hissiyat” alanları | “Warmth score” (1–5 veya benzeri), “Source”, “Stage” — varsayılan şablon olarak sunulabilir | ☑ |
+| A3.3 | Filtre/raporlama | Özel alanlara göre filtre ve dashboard’da kullanım | ☑ |
 
 ### A4 — Etiketleme ve segmentler
 | # | Özellik | Detay / Kriter | Todo |
@@ -41,16 +41,16 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### A5 — Akıllı birleştirme (Dedup)
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| A5.1 | Eşleştirme | Email exact match; telefon normalize + match; isim benzerliği (Levenshtein veya benzeri) | ☐ |
-| A5.2 | Merge UI | “Olası duplikatlar” listesi; kullanıcı seçer, hangi alanların kalacağı seçilir | ☐ |
-| A5.3 | Import sonrası öneri | CSV/import bitince “X olası tekrar var” önerisi | ☐ |
+| A5.1 | Eşleştirme | Email exact match; telefon normalize + match; isim benzerliği (Levenshtein veya benzeri) | ☑ |
+| A5.2 | Merge UI | “Olası duplikatlar” listesi; kullanıcı seçer, hangi alanların kalacağı seçilir | ☑ |
+| A5.3 | Import sonrası öneri | CSV/import bitince “X olası tekrar var” önerisi | ☑ |
 
 ### A6 — Ek dosya / attachment (local only)
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| A6.1 | Desteklenen formatlar | PDF, doc (opsiyonel); pitch deck, sözleşme notu — hepsi local storage | ☐ |
-| A6.2 | Bağlama | Kişi veya şirket kartına eklenir; dosya uygulama veri klasöründe veya kullanıcı seçtiği klasörde (BYO) | ☐ |
-| A6.3 | Güvenlik | Attachment’lar da at-rest encryption kapsamında | ☐ |
+| A6.1 | Desteklenen formatlar | PDF, doc (opsiyonel); pitch deck, sözleşme notu — hepsi local storage | ☑ |
+| A6.2 | Bağlama | Kişi veya şirket kartına eklenir; dosya uygulama veri klasöründe veya kullanıcı seçtiği klasörde (BYO) | ☑ |
+| A6.3 | Güvenlik | Attachment’lar da at-rest encryption kapsamında | ☑ |
 
 ---
 
@@ -59,23 +59,23 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### B1 — Interaction log
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| B1.1 | Etkileşim tipleri | Meeting, Call, Email, DM (manuel giriş); tarih + kısa özet/not | ☐ |
-| B1.2 | Timeline görünümü | Kişi/şirket kartında kronolojik liste; “Last touched” otomatik güncellenir | ☐ |
-| B1.3 | Hızlı ekleme | “Meeting yaptık” butonu + tarih seçici + not alanı | ☐ |
+| B1.1 | Etkileşim tipleri | Meeting, Call, Email, DM (manuel giriş); tarih + kısa özet/not | ☑ |
+| B1.2 | Timeline görünümü | Kişi/şirket kartında kronolojik liste; “Last touched” otomatik güncellenir | ☑ |
+| B1.3 | Hızlı ekleme | “Meeting yaptık” butonu + tarih seçici + not alanı | ☑ |
 
 ### B2 — Last touched / Next touch
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| B2.1 | Last touched | Son etkileşim tarihi; interaction eklendiğinde otomatik güncelleme | ☐ |
-| B2.2 | Next touch | Kullanıcı tarafından set edilen veya “Follow-up X gün sonra” ile türetilen tarih | ☐ |
-| B2.3 | Liste/filtre | “Next touch bu hafta”, “Last touched 30+ gün önce” filtreleri | ☐ |
+| B2.1 | Last touched | Son etkileşim tarihi; interaction eklendiğinde otomatik güncelleme | ☑ |
+| B2.2 | Next touch | Kullanıcı tarafından set edilen veya “Follow-up X gün sonra” ile türetilen tarih | ☑ |
+| B2.3 | Liste/filtre | “Next touch bu hafta”, “Last touched 30+ gün önce” filtreleri | ☑ |
 
 ### B3 — Relationship health sinyali
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| B3.1 | Basit model | Recency (son temas ne zaman) + frequency (son N ayda kaç temas); tamamen local hesaplama | ☐ |
-| B3.2 | Görselleştirme | Kişi kartında basit gösterge (örn. renk/ikon: yeşil/sarı/kırmızı veya “Warm / Cooling / Cold”) | ☐ |
-| B3.3 | Ayarlanabilir | Kullanıcı eşikleri değiştirebilir (opsiyonel) | ☐ |
+| B3.1 | Basit model | Recency (son temas ne zaman) + frequency (son N ayda kaç temas); tamamen local hesaplama | ☑ |
+| B3.2 | Görselleştirme | Kişi kartında basit gösterge (örn. renk/ikon: yeşil/sarı/kırmızı veya “Warm / Cooling / Cold”) | ☑ |
+| B3.3 | Ayarlanabilir | Kullanıcı eşikleri değiştirebilir (opsiyonel) | ☑ |
 
 ---
 

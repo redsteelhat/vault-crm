@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, type Contact, type CustomField, type Company } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserPlus, Search } from "lucide-react";
+import { getRelationshipHealthRecencyOnly, HEALTH_COLORS, type HealthStatus } from "@/lib/relationshipHealth";
 
 function formatDate(s: string | null) {
   if (!s) return "—";
@@ -44,6 +45,7 @@ export function Contacts() {
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [search, setSearch] = useState("");
+  const [touchFilter, setTouchFilter] = useState<"" | "next_this_week" | "last_30_plus">("");
   const [fieldFilterId, setFieldFilterId] = useState<string>("");
   const [fieldFilterValue, setFieldFilterValue] = useState<string>("");
   const [fieldFilterIds, setFieldFilterIds] = useState<Set<string> | null>(null);
@@ -73,6 +75,8 @@ export function Contacts() {
     notes: "",
   });
 
+  const navigate = useNavigate();
+
   const filterFields = customFields.filter((f) => {
     if (f.kind !== "single_select" && f.kind !== "multi_select") return false;
     return parseOptions(f.options).length > 0;
@@ -83,13 +87,26 @@ export function Contacts() {
     : [];
 
   useEffect(() => {
+    setLoading(true);
     Promise.all([api.contactList(), api.customFieldList(), api.companyList()])
       .then(([c, f, co]) => {
-        setContacts(c);
-        setCustomFields(f);
-        setCompanies(co ?? []);
+        try {
+          setContacts(Array.isArray(c) ? c : []);
+          setCustomFields(Array.isArray(f) ? f : []);
+          setCompanies(Array.isArray(co) ? co : []);
+        } catch (e) {
+          console.error(e);
+          setContacts([]);
+          setCustomFields([]);
+          setCompanies([]);
+        }
       })
-      .catch(console.error)
+      .catch((e) => {
+        console.error(e);
+        setContacts([]);
+        setCustomFields([]);
+        setCompanies([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -104,7 +121,8 @@ export function Contacts() {
       .catch(() => setFieldFilterIds(new Set()));
   }, [fieldFilterId, fieldFilterValue]);
 
-  let filtered = contacts;
+  const contactsList = Array.isArray(contacts) ? contacts : [];
+  let filtered = contactsList;
   if (search.trim()) {
     filtered = filtered.filter(
       (c) =>
@@ -115,6 +133,27 @@ export function Contacts() {
   }
   if (fieldFilterIds) {
     filtered = filtered.filter((c) => fieldFilterIds.has(c.id));
+  }
+  if (touchFilter === "next_this_week") {
+    const now = new Date();
+    const day = now.getDay();
+    const mon = new Date(now);
+    mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+    mon.setHours(0, 0, 0, 0);
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    sun.setHours(23, 59, 59, 999);
+    filtered = filtered.filter((c) => {
+      const nt = c.next_touch_at ? new Date(c.next_touch_at) : null;
+      return nt != null && nt >= mon && nt <= sun;
+    });
+  }
+  if (touchFilter === "last_30_plus") {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    filtered = filtered.filter((c) => {
+      const lt = c.last_touched_at ? new Date(c.last_touched_at).getTime() : 0;
+      return lt === 0 || lt <= cutoff;
+    });
   }
 
   if (loading) {
@@ -156,8 +195,7 @@ export function Contacts() {
         website: newForm.website.trim() || null,
         notes: newForm.notes.trim() || null,
       })
-      .then(() => api.contactList().then(setContacts))
-      .then(() => {
+      .then((created) => {
         setShowAdd(false);
         setNewForm({
           first_name: "",
@@ -177,6 +215,8 @@ export function Contacts() {
           notes: "",
         });
         setValidation({});
+        api.contactList().then(setContacts).catch(console.error);
+        navigate(`/contacts/${created.id}`);
       })
       .catch(console.error);
   };
@@ -382,6 +422,15 @@ export function Contacts() {
             className="pl-9"
           />
         </div>
+        <select
+          value={touchFilter}
+          onChange={(e) => setTouchFilter(e.target.value as "" | "next_this_week" | "last_30_plus")}
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+        >
+          <option value="">Temas filtresi (B2.3)</option>
+          <option value="next_this_week">Next touch bu hafta</option>
+          <option value="last_30_plus">Last touched 30+ gün önce</option>
+        </select>
         {filterFields.length > 0 && (
           <>
             <select
@@ -430,8 +479,20 @@ export function Contacts() {
                   to={`/contacts/${c.id}`}
                   className="flex min-w-0 flex-1 flex-col hover:underline"
                 >
-                  <span className="font-medium">
+                  <span className="font-medium flex items-center gap-2">
                     {c.first_name} {c.last_name}
+                    {(() => {
+                      const r = getRelationshipHealthRecencyOnly(c);
+                      const colors = HEALTH_COLORS[r.health as HealthStatus];
+                      return (
+                        <span
+                          className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${colors.bg} ${colors.text} ${colors.border}`}
+                          title={`İlişki: ${r.label}`}
+                        >
+                          {r.label}
+                        </span>
+                      );
+                    })()}
                   </span>
                   {(c.company || c.email) && (
                     <span className="truncate text-sm text-muted-foreground">

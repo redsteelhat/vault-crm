@@ -2,31 +2,39 @@
 // Encryption (SQLCipher / at-rest) can be added later; MVP uses plain SQLite in app data dir.
 
 use rusqlite::{params, Connection, Result as SqlResult};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
 pub struct DbState(pub Mutex<Option<Connection>>);
 
-fn app_data_db_path(app: &AppHandle) -> std::io::Result<PathBuf> {
+fn app_data_dir(app: &AppHandle) -> std::io::Result<PathBuf> {
     let app_data = app
         .path()
         .app_data_dir()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     std::fs::create_dir_all(&app_data)?;
-    Ok(app_data.join("vault.db"))
+    Ok(app_data)
 }
 
 pub fn init_db(app: &AppHandle) -> SqlResult<Connection> {
-    let path = app_data_db_path(app).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+    let app_data = app_data_dir(app).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+    let path = app_data.join("vault.db");
     let conn = Connection::open(&path)?;
     init_schema(&conn)?;
+    init_settings(&conn, &app_data)?;
     Ok(conn)
 }
 
 fn init_schema(conn: &Connection) -> SqlResult<()> {
     conn.execute_batch(
         "
+        -- App settings (key/value)
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+
         -- Tags (e.g. Investors, Customers, LPs)
         CREATE TABLE IF NOT EXISTS tags (
             id TEXT PRIMARY KEY,
@@ -129,6 +137,20 @@ fn init_schema(conn: &Connection) -> SqlResult<()> {
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
+        -- Attachments (A6)
+        CREATE TABLE IF NOT EXISTS attachments (
+            id TEXT PRIMARY KEY,
+            owner_type TEXT NOT NULL,
+            owner_id TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            mime TEXT,
+            size INTEGER,
+            storage_path TEXT NOT NULL,
+            encrypted INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_attachments_owner ON attachments(owner_type, owner_id);
+
         -- FTS5 full-text search (contacts + notes)
         CREATE VIRTUAL TABLE IF NOT EXISTS contacts_fts USING fts5(
             first_name, last_name, company, notes,
@@ -164,6 +186,22 @@ fn init_schema(conn: &Connection) -> SqlResult<()> {
         }
     }
     seed_default_custom_fields(conn)?;
+    Ok(())
+}
+
+fn init_settings(conn: &Connection, app_data: &Path) -> SqlResult<()> {
+    let app_data_str = app_data.to_string_lossy().to_string();
+    conn.execute(
+        "INSERT OR IGNORE INTO app_settings (key, value) VALUES ('app_data_dir', ?1)",
+        params![app_data_str],
+    )?;
+    let attachments_dir = app_data.join("attachments");
+    let _ = std::fs::create_dir_all(&attachments_dir);
+    let attachments_str = attachments_dir.to_string_lossy().to_string();
+    conn.execute(
+        "INSERT OR IGNORE INTO app_settings (key, value) VALUES ('attachments_dir', ?1)",
+        params![attachments_str],
+    )?;
     Ok(())
 }
 

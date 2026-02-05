@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, type Company } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Plus } from "lucide-react";
 import { DomainAvatar } from "@/components/DomainAvatar";
 
 export function Companies() {
+  const navigate = useNavigate();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -31,13 +32,14 @@ export function Companies() {
         industry: newIndustry.trim() || null,
         notes: newNotes.trim() || null,
       })
-      .then(() => {
+      .then((created) => {
         setNewName("");
         setNewDomain("");
         setNewIndustry("");
         setNewNotes("");
         setShowAdd(false);
         api.companyList().then(setCompanies).catch(console.error);
+        navigate(`/companies/${created.id}`);
       })
       .catch(console.error);
   };

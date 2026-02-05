@@ -1,5 +1,6 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Dashboard } from "@/pages/Dashboard";
 import { Contacts } from "@/pages/Contacts";
 import { ContactDetail } from "@/pages/ContactDetail";
@@ -12,7 +13,8 @@ import { Dedup } from "@/pages/Dedup";
 function App() {
   return (
     <MainLayout>
-      <Routes>
+      <ErrorBoundary>
+        <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/contacts" element={<Contacts />} />
         <Route path="/contacts/:id" element={<ContactDetail />} />
@@ -21,7 +23,9 @@ function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/import" element={<Import />} />
         <Route path="/dedup" element={<Dedup />} />
-      </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </ErrorBoundary>
     </MainLayout>
   );
 }

@@ -40,6 +40,8 @@ export interface CreateContactInput {
   twitter_url?: string | null;
   website?: string | null;
   notes?: string | null;
+  /** B2.2: Sonraki temas tarihi */
+  next_touch_at?: string | null;
 }
 
 export interface Company {
@@ -81,6 +83,22 @@ export interface CreateNoteInput {
   kind?: string | null;
   title?: string | null;
   body: string;
+}
+
+export interface Interaction {
+  id: string;
+  contact_id: string;
+  kind: string;
+  happened_at: string;
+  summary: string | null;
+  created_at: string;
+}
+
+export interface CreateInteractionInput {
+  contact_id: string;
+  kind: string;
+  happened_at: string;
+  summary?: string | null;
 }
 
 export interface Reminder {
@@ -144,6 +162,25 @@ export interface CustomValueInput {
   value?: string | null;
 }
 
+export interface Attachment {
+  id: string;
+  owner_type: string;
+  owner_id: string;
+  file_name: string;
+  mime: string | null;
+  size: number | null;
+  storage_path: string;
+  created_at: string;
+}
+
+export interface AttachmentCreateInput {
+  owner_type: "contact" | "company";
+  owner_id: string;
+  file_name: string;
+  mime?: string | null;
+  bytes: number[];
+}
+
 export interface DedupCandidate {
   a: Contact;
   b: Contact;
@@ -184,12 +221,25 @@ export const api = {
     invoke<string[]>("contact_ids_by_custom_value", { fieldId, value }),
   noteList: (contactId: string) => invoke<Note[]>("note_list", { contactId }),
   noteCreate: (input: CreateNoteInput) => invoke<Note>("note_create", { input }),
+  interactionList: (contactId: string) =>
+    invoke<Interaction[]>("interaction_list", { contactId }),
+  interactionCreate: (input: CreateInteractionInput) =>
+    invoke<Interaction>("interaction_create", { input }),
   reminderList: () => invoke<Reminder[]>("reminder_list"),
   reminderCreate: (input: CreateReminderInput) =>
     invoke<Reminder>("reminder_create", { input }),
   reminderComplete: (id: string) => invoke<void>("reminder_complete", { id }),
   reminderSnooze: (id: string, until: string) =>
     invoke<void>("reminder_snooze", { id, until }),
+  attachmentsDirGet: () => invoke<string>("attachments_dir_get"),
+  attachmentsDirSet: (path: string) =>
+    invoke<void>("attachments_dir_set", { path }),
+  attachmentList: (ownerType: "contact" | "company", ownerId: string) =>
+    invoke<Attachment[]>("attachment_list", { ownerType, ownerId }),
+  attachmentAdd: (input: AttachmentCreateInput) =>
+    invoke<Attachment>("attachment_add", { input }),
+  attachmentDelete: (id: string) => invoke<void>("attachment_delete", { id }),
+  attachmentOpen: (id: string) => invoke<string>("attachment_open", { id }),
   importContacts: (rows: ImportRow[]) =>
     invoke<number>("import_contacts", { rows }),
   searchContacts: (q: string) => invoke<string[]>("search_contacts", { q }),

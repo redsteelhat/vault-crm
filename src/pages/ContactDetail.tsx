@@ -1,12 +1,23 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { api, type Contact, type Note, type Reminder, type Company, type CustomValue } from "@/lib/api";
+import {
+  api,
+  type Contact,
+  type Note,
+  type Reminder,
+  type Company,
+  type CustomValue,
+  type Attachment,
+  type Interaction,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, StickyNote, Bell, Pencil, Save, X } from "lucide-react";
+import { ArrowLeft, StickyNote, Bell, Pencil, Save, X, Calendar, Phone, Mail, MessageCircle } from "lucide-react";
+import { open } from "@tauri-apps/plugin-shell";
+import { getRelationshipHealth, HEALTH_COLORS, type HealthStatus } from "@/lib/relationshipHealth";
 
 function formatDate(s: string | null) {
   if (!s) return "—";
@@ -15,6 +26,15 @@ function formatDate(s: string | null) {
   } catch {
     return s;
   }
+}
+
+function formatBytes(bytes: number | null | undefined) {
+  if (!bytes && bytes !== 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(1)} MB`;
 }
 
 function parseOptions(options: string | null): string[] {
@@ -66,13 +86,24 @@ export function ContactDetail() {
   const [contact, setContact] = useState<Contact | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachUploading, setAttachUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [noteBody, setNoteBody] = useState("");
   const [noteKind, setNoteKind] = useState("note");
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDays, setReminderDays] = useState(14);
+  const [interactionKind, setInteractionKind] = useState<"meeting" | "call" | "email" | "dm">("meeting");
+  const [interactionDate, setInteractionDate] = useState(() =>
+    new Date().toISOString().slice(0, 16)
+  );
+  const [interactionSummary, setInteractionSummary] = useState("");
+  const [interactionFollowUpDays, setInteractionFollowUpDays] = useState(0);
   const [form, setForm] = useState<Record<string, string>>({});
   const [customValues, setCustomValues] = useState<CustomValue[]>([]);
   const [customForm, setCustomForm] = useState<Record<string, string>>({});
@@ -84,47 +115,65 @@ export function ContactDetail() {
   }>({});
 
   const load = () => {
-    if (!id) return;
+    const rawId = id?.trim();
+    if (!rawId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     Promise.all([
-      api.contactGet(id),
+      api.contactGet(rawId),
       api.companyList(),
-      api.noteList(id),
-      api.reminderList().then((r) => r.filter((x) => x.contact_id === id)),
-      api.contactCustomValuesGet(id),
+      api.noteList(rawId),
+      api.interactionList(rawId),
+      api.reminderList().then((r) => (Array.isArray(r) ? r : []).filter((x) => x.contact_id === rawId)),
+      api.contactCustomValuesGet(rawId),
+      api.attachmentList("contact", rawId),
     ])
-      .then(([c, co, n, r, cv]) => {
-        setContact(c ?? null);
-        setCompanies(co ?? []);
-        setNotes(n);
-        setReminders(r);
-        setCustomValues(cv ?? []);
-        const cf: Record<string, string> = {};
-        (cv ?? []).forEach((v) => {
-          cf[v.field_id] = v.value ?? "";
-        });
-        setCustomForm(cf);
-        if (c) {
-          setForm({
-            first_name: c.first_name ?? "",
-            last_name: c.last_name ?? "",
-            title: c.title ?? "",
-            company: c.company ?? "",
-            company_id: c.company_id ?? "",
-            city: c.city ?? "",
-            country: c.country ?? "",
-            email: c.email ?? "",
-            email_secondary: c.email_secondary ?? "",
-            phone: c.phone ?? "",
-            phone_secondary: c.phone_secondary ?? "",
-            linkedin_url: c.linkedin_url ?? "",
-            twitter_url: c.twitter_url ?? "",
-            website: c.website ?? "",
-            notes: c.notes ?? "",
+      .then(([c, co, n, ints, r, cv, at]) => {
+        try {
+          setContact(c ?? null);
+          setCompanies(Array.isArray(co) ? co : []);
+          setNotes(Array.isArray(n) ? n : []);
+          setInteractions(Array.isArray(ints) ? ints : []);
+          setReminders(Array.isArray(r) ? r : []);
+          setCustomValues(Array.isArray(cv) ? cv : []);
+          setAttachments(Array.isArray(at) ? at : []);
+          const cf: Record<string, string> = {};
+          (Array.isArray(cv) ? cv : []).forEach((v) => {
+            cf[v.field_id] = v.value ?? "";
           });
+          setCustomForm(cf);
+          if (c && typeof c === "object") {
+            const nextTouch = c.next_touch_at ?? "";
+            setForm({
+              first_name: c.first_name ?? "",
+              last_name: c.last_name ?? "",
+              title: c.title ?? "",
+              company: c.company ?? "",
+              company_id: c.company_id ?? "",
+              city: c.city ?? "",
+              country: c.country ?? "",
+              email: c.email ?? "",
+              email_secondary: c.email_secondary ?? "",
+              phone: c.phone ?? "",
+              phone_secondary: c.phone_secondary ?? "",
+              linkedin_url: c.linkedin_url ?? "",
+              twitter_url: c.twitter_url ?? "",
+              website: c.website ?? "",
+              notes: c.notes ?? "",
+              next_touch_at: nextTouch ? nextTouch.slice(0, 16) : "",
+            });
+          }
+        } catch (e) {
+          console.error(e);
+          setContact(null);
         }
       })
-      .catch(console.error)
+      .catch((e) => {
+        console.error(e);
+        setContact(null);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -142,6 +191,48 @@ export function ContactDetail() {
       })
       .then(() => {
         setNoteBody("");
+        load();
+      })
+      .catch(console.error);
+  };
+
+  const addInteraction = () => {
+    if (!id) return;
+    const happenedAt = new Date(interactionDate).toISOString();
+    api
+      .interactionCreate({
+        contact_id: id,
+        kind: interactionKind,
+        happened_at: happenedAt,
+        summary: interactionSummary.trim() || null,
+      })
+      .then(() => {
+        if (interactionFollowUpDays > 0 && id) {
+          const d = new Date(interactionDate);
+          d.setDate(d.getDate() + interactionFollowUpDays);
+          return api.contactUpdate(id, {
+            first_name: form.first_name?.trim() ?? "",
+            last_name: form.last_name?.trim() ?? "",
+            title: form.title?.trim() || null,
+            company: form.company?.trim() || null,
+            company_id: form.company_id || null,
+            city: form.city?.trim() || null,
+            country: form.country?.trim() || null,
+            email: form.email?.trim() || null,
+            email_secondary: form.email_secondary?.trim() || null,
+            phone: form.phone?.trim() || null,
+            phone_secondary: form.phone_secondary?.trim() || null,
+            linkedin_url: form.linkedin_url?.trim() || null,
+            twitter_url: form.twitter_url?.trim() || null,
+            website: form.website?.trim() || null,
+            notes: form.notes?.trim() || null,
+            next_touch_at: d.toISOString(),
+          });
+        }
+      })
+      .then(() => {
+        setInteractionSummary("");
+        setInteractionDate(new Date().toISOString().slice(0, 16));
         load();
       })
       .catch(console.error);
@@ -168,6 +259,40 @@ export function ContactDetail() {
 
   const completeReminder = (reminderId: string) => {
     api.reminderComplete(reminderId).then(load).catch(console.error);
+  };
+
+  const addAttachment = async () => {
+    if (!id || !attachFile) return;
+    setAttachUploading(true);
+    setAttachError(null);
+    try {
+      const buffer = await attachFile.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+      await api.attachmentAdd({
+        owner_type: "contact",
+        owner_id: id,
+        file_name: attachFile.name,
+        mime: attachFile.type || null,
+        bytes,
+      });
+      setAttachFile(null);
+      load();
+    } catch (e) {
+      setAttachError(String(e));
+    } finally {
+      setAttachUploading(false);
+    }
+  };
+
+  const openAttachment = (att: Attachment) => {
+    api
+      .attachmentOpen(att.id)
+      .then((path) => open(path))
+      .catch(console.error);
+  };
+
+  const deleteAttachment = (att: Attachment) => {
+    api.attachmentDelete(att.id).then(load).catch(console.error);
   };
 
   const saveContact = () => {
@@ -200,6 +325,7 @@ export function ContactDetail() {
         twitter_url: form.twitter_url.trim() || null,
         website: form.website.trim() || null,
         notes: form.notes.trim() || null,
+        next_touch_at: form.next_touch_at?.trim() ? new Date(form.next_touch_at.trim()).toISOString() : null,
       })
       .then(() =>
         api.contactCustomValuesSet(
@@ -229,10 +355,17 @@ export function ContactDetail() {
 
   if (loading || !contact) {
     return (
-      <div className="flex h-full items-center justify-center p-8">
-        <p className="text-muted-foreground">
-          {loading ? "Yükleniyor…" : "Kişi bulunamadı."}
-        </p>
+      <div className="flex min-h-[50vh] w-full items-center justify-center p-8">
+        <div className="text-center">
+          <p className="text-muted-foreground">
+            {loading ? "Yükleniyor…" : id ? "Kişi bulunamadı." : "Geçersiz bağlantı."}
+          </p>
+          {!loading && (
+            <Button variant="outline" className="mt-4" onClick={() => navigate("/contacts")}>
+              Kişiler listesine dön
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
@@ -247,6 +380,18 @@ export function ContactDetail() {
           <h1 className="text-2xl font-semibold">
             {contact.first_name} {contact.last_name}
           </h1>
+          {(() => {
+            const result = getRelationshipHealth(contact, interactions);
+            const colors = HEALTH_COLORS[result.health as HealthStatus];
+            return (
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${colors.bg} ${colors.text} ${colors.border}`}
+                title={`Recency: ${result.recencyDays != null ? result.recencyDays + " gün önce" : "—"} · Son ${result.frequencyInPeriod} temas`}
+              >
+                {result.label}
+              </span>
+            );
+          })()}
         </div>
         {!editing ? (
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
@@ -433,6 +578,14 @@ export function ContactDetail() {
                     onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                     placeholder="Kişiye özel notlar…"
                     rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Sonraki temas (Next touch)</Label>
+                  <Input
+                    type="datetime-local"
+                    value={form.next_touch_at ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, next_touch_at: e.target.value }))}
                   />
                 </div>
                 {customValues.length > 0 && (
@@ -643,6 +796,71 @@ export function ContactDetail() {
 
           <Card>
             <CardHeader className="flex flex-row items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              <CardTitle className="text-base">Etkileşim (B1)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Meeting yaptık / Arama / Email / DM — tarih + kısa özet
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: "meeting" as const, label: "Toplantı", Icon: Calendar },
+                  { value: "call" as const, label: "Arama", Icon: Phone },
+                  { value: "email" as const, label: "Email", Icon: Mail },
+                  { value: "dm" as const, label: "DM", Icon: MessageCircle },
+                ].map(({ value, label, Icon }) => (
+                  <Button
+                    key={value}
+                    variant={interactionKind === value ? "primary" : "outline"}
+                    size="sm"
+                    onClick={() => setInteractionKind(value)}
+                  >
+                    <Icon className="mr-1 h-3.5 w-3.5" />
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Tarih / saat</Label>
+                  <Input
+                    type="datetime-local"
+                    value={interactionDate}
+                    onChange={(e) => setInteractionDate(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+              <Textarea
+                placeholder="Kısa özet / not…"
+                value={interactionSummary}
+                onChange={(e) => setInteractionSummary(e.target.value)}
+                rows={2}
+                className="text-sm"
+              />
+              <div className="space-y-1">
+                <Label className="text-xs">B2.2 Follow-up: Sonraki temas tarihi</Label>
+                <select
+                  value={interactionFollowUpDays}
+                  onChange={(e) => setInteractionFollowUpDays(Number(e.target.value))}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value={0}>Yok</option>
+                  <option value={3}>3 gün sonra hatırlat</option>
+                  <option value={7}>7 gün sonra hatırlat</option>
+                  <option value={14}>14 gün sonra hatırlat</option>
+                  <option value={30}>30 gün sonra hatırlat</option>
+                </select>
+              </div>
+              <Button onClick={addInteraction} size="sm">
+                Etkileşim ekle
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center gap-2">
               <Bell className="h-4 w-4" />
               <CardTitle className="text-base">Hatırlatıcı</CardTitle>
             </CardHeader>
@@ -666,6 +884,49 @@ export function ContactDetail() {
               <Button onClick={addReminder} disabled={!reminderTitle.trim()}>
                 Hatırlatıcı ekle
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Ek dosyalar (A6)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.ppt,.pptx"
+                onChange={(e) => setAttachFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-sm"
+              />
+              {attachError && (
+                <p className="rounded border border-destructive/50 bg-destructive/10 p-2 text-sm text-destructive">
+                  {attachError}
+                </p>
+              )}
+              <Button onClick={addAttachment} disabled={!attachFile || attachUploading}>
+                {attachUploading ? "Yükleniyor…" : "Ekle"}
+              </Button>
+              <ul className="divide-y">
+                {attachments.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between py-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{a.file_name}</p>
+                      <p className="text-xs text-muted-foreground">{formatBytes(a.size)}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openAttachment(a)}>
+                        Aç
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => deleteAttachment(a)}>
+                        Sil
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {attachments.length === 0 && (
+                <p className="text-sm text-muted-foreground">Henüz ek dosya yok.</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -713,6 +974,38 @@ export function ContactDetail() {
                 </li>
               ))}
             </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {(interactions.length > 0 || contact) && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-base">Etkileşim timeline (B1.2)</CardTitle>
+            <p className="text-sm font-normal text-muted-foreground">
+              Kronolojik liste · Son temas: {formatDate(contact?.last_touched_at ?? null)}
+            </p>
+          </CardHeader>
+          <CardContent>
+            {interactions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Henüz etkileşim kaydı yok. Yukarıdan ekleyin.</p>
+            ) : (
+              <ul className="space-y-2">
+                {interactions.map((i) => (
+                  <li key={i.id} className="rounded border p-3 text-sm">
+                    <span className="font-medium capitalize text-muted-foreground">{i.kind}</span>
+                    {" · "}
+                    <span>{formatDate(i.happened_at)}</span>
+                    {i.summary && (
+                      <>
+                        <br />
+                        <span className="text-muted-foreground">{i.summary}</span>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       )}

@@ -5,8 +5,15 @@ use chrono::Utc;
 use rusqlite::{params, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use tauri::State;
 use uuid::Uuid;
+
+use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Key, Nonce};
+use base64::{engine::general_purpose, Engine as _};
+use rand::rngs::OsRng;
+use rand::RngCore;
 
 use crate::db::DbState;
 
@@ -86,6 +93,8 @@ pub struct CreateContactInput {
     pub twitter_url: Option<String>,
     pub website: Option<String>,
     pub notes: Option<String>,
+    /// B2.2: Kullanıcı tarafından set edilen sonraki temas tarihi
+    pub next_touch_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -266,6 +275,94 @@ fn name_similarity(a_first: &str, a_last: &str, b_first: &str, b_last: &str) -> 
     }
 }
 
+fn setting_get(conn: &rusqlite::Connection, key: &str) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT value FROM app_settings WHERE key = ?1",
+        params![key],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+fn setting_set(conn: &rusqlite::Connection, key: &str, value: &str) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![key, value],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn attachments_dir(conn: &rusqlite::Connection) -> Result<PathBuf, String> {
+    let dir = setting_get(conn, "attachments_dir")?
+        .ok_or_else(|| "Attachments dir not set".to_string())?;
+    let path = PathBuf::from(dir);
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
+fn attachments_key(conn: &rusqlite::Connection) -> Result<Vec<u8>, String> {
+    if let Some(existing) = setting_get(conn, "attachments_key")? {
+        if let Ok(bytes) = general_purpose::STANDARD.decode(existing.as_bytes()) {
+            if bytes.len() == 32 {
+                return Ok(bytes);
+            }
+        }
+    }
+    let mut key = vec![0u8; 32];
+    OsRng.fill_bytes(&mut key);
+    let encoded = general_purpose::STANDARD.encode(&key);
+    setting_set(conn, "attachments_key", &encoded)?;
+    Ok(key)
+}
+
+fn encrypt_bytes(key: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, String> {
+    let key = Key::<Aes256Gcm>::from_slice(key);
+    let cipher = Aes256Gcm::new(key);
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let mut out = Vec::with_capacity(12 + plaintext.len() + 16);
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext)
+        .map_err(|e| e.to_string())?;
+    out.extend_from_slice(&nonce_bytes);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
+}
+
+fn decrypt_bytes(key: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, String> {
+    if ciphertext.len() < 12 {
+        return Err("Encrypted payload too short".to_string());
+    }
+    let key = Key::<Aes256Gcm>::from_slice(key);
+    let cipher = Aes256Gcm::new(key);
+    let nonce = Nonce::from_slice(&ciphertext[..12]);
+    cipher
+        .decrypt(nonce, &ciphertext[12..])
+        .map_err(|e| e.to_string())
+}
+
+fn sanitize_file_name(name: &str) -> String {
+    let name = name.replace('\\', "_").replace('/', "_");
+    if name.trim().is_empty() {
+        "attachment".to_string()
+    } else {
+        name
+    }
+}
+
+fn is_allowed_attachment(file_name: &str) -> bool {
+    let lower = file_name.to_lowercase();
+    lower.ends_with(".pdf")
+        || lower.ends_with(".doc")
+        || lower.ends_with(".docx")
+        || lower.ends_with(".ppt")
+        || lower.ends_with(".pptx")
+}
+
 fn value_contains_option(value: &Option<String>, target: &str) -> bool {
     let Some(value) = value else { return false; };
     let v = value.trim();
@@ -299,8 +396,8 @@ pub fn contact_list(db: State<DbState>) -> Result<Vec<Contact>, String> {
 
 #[tauri::command]
 pub fn contact_get(db: State<DbState>, id: String) -> Result<Option<Contact>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn_guard.as_mut().ok_or("DB not initialized")?;
     let sql = "SELECT c.id, c.first_name, c.last_name, c.title,
         COALESCE(co.name, c.company), c.company_id, c.city, c.country,
         c.email, c.email_secondary, c.phone, c.phone_secondary,
@@ -333,7 +430,7 @@ pub fn contact_create(db: State<DbState>, input: CreateContactInput) -> Result<C
         let conn = conn_guard.as_ref().ok_or("DB not initialized")?;
         resolve_company_name(conn, &company_id, &mut company);
         conn.execute(
-            "INSERT INTO contacts (id, first_name, last_name, title, company, company_id, city, country, email, email_secondary, phone, phone_secondary, linkedin_url, twitter_url, website, notes, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            "INSERT INTO contacts (id, first_name, last_name, title, company, company_id, city, country, email, email_secondary, phone, phone_secondary, linkedin_url, twitter_url, website, notes, next_touch_at, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
             params![
                 id,
                 input.first_name,
@@ -351,6 +448,7 @@ pub fn contact_create(db: State<DbState>, input: CreateContactInput) -> Result<C
                 input.twitter_url,
                 input.website,
                 input.notes,
+                input.next_touch_at,
                 now,
                 now,
             ],
@@ -381,7 +479,7 @@ pub fn contact_update(
         let conn = conn_guard.as_ref().ok_or("DB not initialized")?;
         resolve_company_name(conn, &company_id, &mut company);
         conn.execute(
-            "UPDATE contacts SET first_name=?1, last_name=?2, title=?3, company=?4, company_id=?5, city=?6, country=?7, email=?8, email_secondary=?9, phone=?10, phone_secondary=?11, linkedin_url=?12, twitter_url=?13, website=?14, notes=?15, updated_at=?16 WHERE id=?17",
+            "UPDATE contacts SET first_name=?1, last_name=?2, title=?3, company=?4, company_id=?5, city=?6, country=?7, email=?8, email_secondary=?9, phone=?10, phone_secondary=?11, linkedin_url=?12, twitter_url=?13, website=?14, notes=?15, next_touch_at=?16, updated_at=?17 WHERE id=?18",
             params![
                 input.first_name,
                 input.last_name,
@@ -398,6 +496,7 @@ pub fn contact_update(
                 input.twitter_url,
                 input.website,
                 input.notes,
+                input.next_touch_at,
                 now,
                 id,
             ],
@@ -409,16 +508,16 @@ pub fn contact_update(
 
 #[tauri::command]
 pub fn contact_delete(db: State<DbState>, id: String) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn_guard.as_mut().ok_or("DB not initialized")?;
     conn.execute("DELETE FROM contacts WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn company_list(db: State<DbState>) -> Result<Vec<Company>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn_guard.as_mut().ok_or("DB not initialized")?;
     let mut stmt = conn
         .prepare("SELECT id, name, domain, industry, notes, created_at, updated_at FROM companies ORDER BY name")
         .map_err(|e| e.to_string())?;
@@ -538,6 +637,27 @@ pub struct CreateCustomFieldInput {
 pub struct CustomValueInput {
     pub field_id: String,
     pub value: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Attachment {
+    pub id: String,
+    pub owner_type: String,
+    pub owner_id: String,
+    pub file_name: String,
+    pub mime: Option<String>,
+    pub size: Option<i64>,
+    pub storage_path: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AttachmentCreateInput {
+    pub owner_type: String,
+    pub owner_id: String,
+    pub file_name: String,
+    pub mime: Option<String>,
+    pub bytes: Vec<u8>,
 }
 
 #[tauri::command]
@@ -759,6 +879,82 @@ pub fn note_create(db: State<DbState>, input: CreateNoteInput) -> Result<Note, S
     Ok(row)
 }
 
+// ---- Interactions (B1: Etkileşim logu) ----
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Interaction {
+    pub id: String,
+    pub contact_id: String,
+    pub kind: String,
+    pub happened_at: String,
+    pub summary: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateInteractionInput {
+    pub contact_id: String,
+    pub kind: String,
+    pub happened_at: String,
+    pub summary: Option<String>,
+}
+
+#[tauri::command]
+pub fn interaction_list(db: State<DbState>, contact_id: String) -> Result<Vec<Interaction>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut stmt = conn
+        .prepare("SELECT id, contact_id, kind, happened_at, summary, created_at FROM interactions WHERE contact_id = ?1 ORDER BY happened_at DESC")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![contact_id], |row| {
+            Ok(Interaction {
+                id: row.get(0)?,
+                contact_id: row.get(1)?,
+                kind: row.get(2)?,
+                happened_at: row.get(3)?,
+                summary: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[tauri::command]
+pub fn interaction_create(db: State<DbState>, input: CreateInteractionInput) -> Result<Interaction, String> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    conn.execute(
+        "INSERT INTO interactions (id, contact_id, kind, happened_at, summary, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![id, input.contact_id, input.kind, input.happened_at, input.summary, now],
+    )
+    .map_err(|e| e.to_string())?;
+    // B1.2: Last touched otomatik güncelle
+    let _ = conn.execute(
+        "UPDATE contacts SET last_touched_at = ?1, updated_at = ?2 WHERE id = ?3",
+        params![input.happened_at, now, input.contact_id],
+    );
+    let mut stmt = conn
+        .prepare("SELECT id, contact_id, kind, happened_at, summary, created_at FROM interactions WHERE id = ?1")
+        .map_err(|e| e.to_string())?;
+    let row = stmt
+        .query_row(params![id], |row| {
+            Ok(Interaction {
+                id: row.get(0)?,
+                contact_id: row.get(1)?,
+                kind: row.get(2)?,
+                happened_at: row.get(3)?,
+                summary: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(row)
+}
+
 // ---- Reminders ----
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -870,6 +1066,152 @@ pub fn reminder_snooze(db: State<DbState>, id: String, until: String) -> Result<
     conn.execute("UPDATE reminders SET snooze_until = ?1 WHERE id = ?2", params![until, id])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// ---- Attachments (A6) ----
+
+#[tauri::command]
+pub fn attachments_dir_get(db: State<DbState>) -> Result<String, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    setting_get(conn, "attachments_dir")?
+        .ok_or_else(|| "Attachments dir not set".to_string())
+}
+
+#[tauri::command]
+pub fn attachments_dir_set(db: State<DbState>, path: String) -> Result<(), String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Err("Path is empty".to_string());
+    }
+    let dir = PathBuf::from(path);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    setting_set(conn, "attachments_dir", path)
+}
+
+#[tauri::command]
+pub fn attachment_list(
+    db: State<DbState>,
+    owner_type: String,
+    owner_id: String,
+) -> Result<Vec<Attachment>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, owner_type, owner_id, file_name, mime, size, storage_path, created_at
+             FROM attachments WHERE owner_type = ?1 AND owner_id = ?2 ORDER BY created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![owner_type, owner_id], |row| {
+            Ok(Attachment {
+                id: row.get(0)?,
+                owner_type: row.get(1)?,
+                owner_id: row.get(2)?,
+                file_name: row.get(3)?,
+                mime: row.get(4)?,
+                size: row.get(5)?,
+                storage_path: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[tauri::command]
+pub fn attachment_add(db: State<DbState>, input: AttachmentCreateInput) -> Result<Attachment, String> {
+    if input.owner_type != "contact" && input.owner_type != "company" {
+        return Err("Invalid owner_type".to_string());
+    }
+    let file_name = sanitize_file_name(&input.file_name);
+    if !is_allowed_attachment(&file_name) {
+        return Err("Desteklenmeyen dosya formatı".to_string());
+    }
+    let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let mut conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn_guard.as_mut().ok_or("DB not initialized")?;
+    let key = attachments_key(conn)?;
+    let dir = attachments_dir(conn)?;
+    let id = Uuid::new_v4().to_string();
+    let encrypted = encrypt_bytes(&key, &input.bytes)?;
+    let path = dir.join(format!("{}.bin", id));
+    std::fs::write(&path, encrypted).map_err(|e| e.to_string())?;
+    let size = input.bytes.len() as i64;
+    conn.execute(
+        "INSERT INTO attachments (id, owner_type, owner_id, file_name, mime, size, storage_path, encrypted, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8)",
+        params![
+            id,
+            input.owner_type,
+            input.owner_id,
+            file_name,
+            input.mime,
+            size,
+            path.to_string_lossy().to_string(),
+            now,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(Attachment {
+        id,
+        owner_type: input.owner_type,
+        owner_id: input.owner_id,
+        file_name,
+        mime: input.mime,
+        size: Some(size),
+        storage_path: path.to_string_lossy().to_string(),
+        created_at: now,
+    })
+}
+
+#[tauri::command]
+pub fn attachment_delete(db: State<DbState>, id: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let row: Option<(String,)> = conn
+        .query_row(
+            "SELECT storage_path FROM attachments WHERE id = ?1",
+            params![id],
+            |r| Ok((r.get(0)?,)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if let Some((path,)) = row {
+        let _ = std::fs::remove_file(path);
+    }
+    conn.execute("DELETE FROM attachments WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn attachment_open(db: State<DbState>, id: String) -> Result<String, String> {
+    let mut conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn_guard.as_mut().ok_or("DB not initialized")?;
+    let row: Option<(String, String)> = conn
+        .query_row(
+            "SELECT storage_path, file_name FROM attachments WHERE id = ?1",
+            params![id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let (path, file_name) = row.ok_or_else(|| "Attachment not found".to_string())?;
+    let encrypted = std::fs::read(path).map_err(|e| e.to_string())?;
+    let key = attachments_key(conn)?;
+    let decrypted = decrypt_bytes(&key, &encrypted)?;
+    let app_data = setting_get(conn, "app_data_dir")?
+        .ok_or_else(|| "app_data_dir not set".to_string())?;
+    let tmp_dir = Path::new(&app_data).join("tmp");
+    std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
+    let safe_name = sanitize_file_name(&file_name);
+    let out_path = tmp_dir.join(format!("{}_{}", id, safe_name));
+    std::fs::write(&out_path, decrypted).map_err(|e| e.to_string())?;
+    Ok(out_path.to_string_lossy().to_string())
 }
 
 // ---- Import (CSV) ----
@@ -1089,8 +1431,8 @@ pub fn contact_merge(db: State<DbState>, input: MergeContactInput) -> Result<Con
     if !is_valid_phone(&input.merged.phone) || !is_valid_phone(&input.merged.phone_secondary) {
         return Err("Geçersiz telefon formatı".to_string());
     }
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let mut guard = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = guard.as_mut().ok_or("DB not initialized")?;
     let sql = "SELECT c.id, c.first_name, c.last_name, c.title,
         COALESCE(co.name, c.company), c.company_id, c.city, c.country,
         c.email, c.email_secondary, c.phone, c.phone_secondary,
@@ -1213,8 +1555,11 @@ pub fn contact_merge(db: State<DbState>, input: MergeContactInput) -> Result<Con
 
     tx.commit().map_err(|e| e.to_string())?;
 
-    contact_get(db, input.primary_id.clone())?
-        .ok_or_else(|| "Contact not found after merge".to_string())
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let merged = stmt
+        .query_row(params![input.primary_id.clone()], row_to_contact)
+        .map_err(|e| e.to_string())?;
+    Ok(merged)
 }
 
 #[cfg(test)]
