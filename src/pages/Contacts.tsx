@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, type Contact, type CustomField, type Company } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,7 +49,10 @@ export function Contacts() {
   const [fieldFilterId, setFieldFilterId] = useState<string>("");
   const [fieldFilterValue, setFieldFilterValue] = useState<string>("");
   const [fieldFilterIds, setFieldFilterIds] = useState<Set<string> | null>(null);
+  const [hashtagFilterIds, setHashtagFilterIds] = useState<Set<string> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
+  const hashtagParam = searchParams.get("hashtag");
   const [showAdd, setShowAdd] = useState(false);
   const [validation, setValidation] = useState<{
     email?: boolean;
@@ -121,6 +124,17 @@ export function Contacts() {
       .catch(() => setFieldFilterIds(new Set()));
   }, [fieldFilterId, fieldFilterValue]);
 
+  useEffect(() => {
+    if (!hashtagParam?.trim()) {
+      setHashtagFilterIds(null);
+      return;
+    }
+    api
+      .contactIdsWithHashtag(hashtagParam.trim())
+      .then((ids) => setHashtagFilterIds(new Set(ids)))
+      .catch(() => setHashtagFilterIds(new Set()));
+  }, [hashtagParam]);
+
   const contactsList = Array.isArray(contacts) ? contacts : [];
   let filtered = contactsList;
   if (search.trim()) {
@@ -133,6 +147,9 @@ export function Contacts() {
   }
   if (fieldFilterIds) {
     filtered = filtered.filter((c) => fieldFilterIds.has(c.id));
+  }
+  if (hashtagFilterIds) {
+    filtered = filtered.filter((c) => hashtagFilterIds.has(c.id));
   }
   if (touchFilter === "next_this_week") {
     const now = new Date();
@@ -422,6 +439,14 @@ export function Contacts() {
             className="pl-9"
           />
         </div>
+        {hashtagParam && (
+          <span className="inline-flex items-center gap-1 rounded-md border border-input bg-muted px-3 py-2 text-sm">
+            Etiket: <strong>#{hashtagParam}</strong>
+            <Link to="/contacts" className="ml-1 text-primary hover:underline">
+              Kaldır
+            </Link>
+          </span>
+        )}
         <select
           value={touchFilter}
           onChange={(e) => setTouchFilter(e.target.value as "" | "next_this_week" | "last_30_plus")}

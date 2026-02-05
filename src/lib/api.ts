@@ -121,6 +121,21 @@ export interface CreateReminderInput {
   recurring_days?: number | null;
 }
 
+/** C2.1 — Global arama sonucu */
+export interface GlobalSearchNoteHit {
+  note_id: string;
+  contact_id: string;
+  contact_name: string;
+  body_snippet: string;
+  created_at: string;
+}
+
+export interface GlobalSearchResult {
+  contacts: Contact[];
+  companies: Company[];
+  note_hits: GlobalSearchNoteHit[];
+}
+
 export interface ImportRow {
   first_name?: string | null;
   last_name?: string | null;
@@ -243,6 +258,10 @@ export const api = {
   importContacts: (rows: ImportRow[]) =>
     invoke<number>("import_contacts", { rows }),
   searchContacts: (q: string) => invoke<string[]>("search_contacts", { q }),
+  globalSearch: (q: string) =>
+    invoke<GlobalSearchResult>("global_search", { q }),
+  contactIdsWithHashtag: (hashtag: string) =>
+    invoke<string[]>("contact_ids_with_hashtag", { hashtag }),
   dedupCandidates: () => invoke<DedupCandidate[]>("dedup_candidates"),
   contactMerge: (input: MergeContactInput) =>
     invoke<Contact>("contact_merge", { input }),

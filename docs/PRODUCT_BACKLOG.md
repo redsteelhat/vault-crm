@@ -91,9 +91,9 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### C2 — Arama ve mention
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| C2.1 | Global hızlı arama | Cmd/Ctrl+K: kişi adı, şirket, not içeriği; sonuçlara hızlı geçiş | ☐ |
-| C2.2 | Notlarda @mention | @kişi → kişiye link; arama/raporlarda “bu kişi geçen notlar” | ☐ |
-| C2.3 | Notlarda #etiket | #tag → mevcut tag’lerle ilişki; tag’e tıklanınca filtre | ☐ |
+| C2.1 | Global hızlı arama | Cmd/Ctrl+K: kişi adı, şirket, not içeriği; sonuçlara hızlı geçiş | ☑ |
+| C2.2 | Notlarda @mention | @kişi → kişiye link; arama/raporlarda “bu kişi geçen notlar” | ☑ |
+| C2.3 | Notlarda #etiket | #tag → mevcut tag’lerle ilişki; tag’e tıklanınca filtre | ☑ |
 
 ---
 

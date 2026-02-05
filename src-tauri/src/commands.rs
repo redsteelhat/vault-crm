@@ -1299,6 +1299,165 @@ pub fn search_contacts(db: State<DbState>, q: String) -> Result<Vec<String>, Str
     Ok(ids)
 }
 
+// C2.1 — Global hızlı arama: kişi, şirket, not içeriği
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GlobalSearchNoteHit {
+    pub note_id: String,
+    pub contact_id: String,
+    pub contact_name: String,
+    pub body_snippet: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GlobalSearchResult {
+    pub contacts: Vec<Contact>,
+    pub companies: Vec<Company>,
+    pub note_hits: Vec<GlobalSearchNoteHit>,
+}
+
+#[tauri::command]
+pub fn global_search(db: State<DbState>, q: String) -> Result<GlobalSearchResult, String> {
+    let q_trim = q.trim();
+    if q_trim.is_empty() {
+        return Ok(GlobalSearchResult {
+            contacts: vec![],
+            companies: vec![],
+            note_hits: vec![],
+        });
+    }
+    let mut conn_guard = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn_guard.as_mut().ok_or("DB not initialized")?;
+
+    // Contacts: use FTS
+    let contact_ids: Vec<String> = {
+        let query = format!("{}*", q_trim.replace(' ', "* "));
+        let mut stmt = conn
+            .prepare("SELECT rowid FROM contacts_fts WHERE contacts_fts MATCH ?1 LIMIT 20")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![query], |row| row.get::<_, i64>(0))
+            .map_err(|e| e.to_string())?;
+        let mut ids = Vec::new();
+        for row in rows {
+            if let Ok(rowid) = row {
+                if let Ok(Some(id)) =
+                    conn.query_row("SELECT id FROM contacts WHERE rowid = ?1", params![rowid], |r| r.get::<_, String>(0)).optional()
+                {
+                    ids.push(id);
+                }
+            }
+        }
+        ids
+    };
+    let contacts: Vec<Contact> = if contact_ids.is_empty() {
+        vec![]
+    } else {
+        let placeholders = contact_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "SELECT c.id, c.first_name, c.last_name, c.title,
+                COALESCE(co.name, c.company), c.company_id, c.city, c.country,
+                c.email, c.email_secondary, c.phone, c.phone_secondary,
+                c.linkedin_url, c.twitter_url, c.website, c.notes,
+                c.last_touched_at, c.next_touch_at, c.created_at, c.updated_at
+                FROM contacts c LEFT JOIN companies co ON c.company_id = co.id
+                WHERE c.id IN ({})",
+            placeholders
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(contact_ids.iter()), row_to_contact)
+            .map_err(|e| e.to_string())?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    // Companies: LIKE name
+    let companies: Vec<Company> = {
+        let pattern = format!("%{}%", q_trim.replace('%', "\\%").replace('_', "\\_"));
+        let mut stmt = conn
+            .prepare("SELECT id, name, domain, industry, notes, created_at, updated_at FROM companies WHERE name LIKE ?1 ESCAPE '\\' LIMIT 20")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![pattern], |row| {
+                Ok(Company {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    domain: row.get(2)?,
+                    industry: row.get(3)?,
+                    notes: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    // Notes: LIKE body, snippet
+    let note_hits: Vec<GlobalSearchNoteHit> = {
+        let pattern = format!("%{}%", q_trim.replace('%', "\\%").replace('_', "\\_"));
+        let mut stmt = conn
+            .prepare(
+                "SELECT n.id, n.contact_id, n.body, n.created_at, c.first_name, c.last_name
+                 FROM notes n JOIN contacts c ON n.contact_id = c.id
+                 WHERE n.body LIKE ?1 ESCAPE '\\'
+                 ORDER BY n.created_at DESC LIMIT 20",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![pattern], |row| {
+                let note_id: String = row.get(0)?;
+                let contact_id: String = row.get(1)?;
+                let body: String = row.get(2)?;
+                let created_at: String = row.get(3)?;
+                let first_name: String = row.get(4)?;
+                let last_name: String = row.get(5)?;
+                let snippet_len = 120;
+                let body_snippet = if body.len() <= snippet_len {
+                    body
+                } else {
+                    format!("{}…", body.chars().take(snippet_len).collect::<String>())
+                };
+                Ok(GlobalSearchNoteHit {
+                    note_id,
+                    contact_id,
+                    contact_name: format!("{} {}", first_name, last_name),
+                    body_snippet,
+                    created_at,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    Ok(GlobalSearchResult {
+        contacts,
+        companies,
+        note_hits,
+    })
+}
+
+// C2.3 — Notlarda #etiket: bu hashtag geçen notları olan contact_id listesi
+#[tauri::command]
+pub fn contact_ids_with_hashtag(db: State<DbState>, hashtag: String) -> Result<Vec<String>, String> {
+    let tag = hashtag.trim();
+    if tag.is_empty() {
+        return Ok(vec![]);
+    }
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    let pattern = format!("%#{}%", tag.replace('%', "\\%").replace('_', "\\_"));
+    let mut stmt = conn
+        .prepare(
+            "SELECT DISTINCT contact_id FROM notes WHERE body LIKE ?1 ESCAPE '\\'",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![pattern], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
 #[tauri::command]
 pub fn dedup_candidates(db: State<DbState>) -> Result<Vec<DedupCandidate>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;

@@ -46,6 +46,8 @@ pub fn run() {
             commands::attachment_open,
             commands::import_contacts,
             commands::search_contacts,
+            commands::global_search,
+            commands::contact_ids_with_hashtag,
             commands::dedup_candidates,
             commands::contact_merge,
         ])
