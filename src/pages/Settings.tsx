@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Shield } from "lucide-react";
+import { Plus, Shield, FolderOpen } from "lucide-react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   getHealthThresholds,
   setHealthThresholds,
@@ -33,16 +34,25 @@ export function Settings() {
   const [healthThresholds, setHealthThresholdsState] = useState<HealthThresholds>(getHealthThresholds());
   const [healthThresholdsSaving, setHealthThresholdsSaving] = useState(false);
   const [crashReportOptIn, setCrashReportOptInState] = useState(getCrashReportOptIn());
+  const [backupDir, setBackupDir] = useState("");
+  const [backupDirSaving, setBackupDirSaving] = useState(false);
+  const [backupDirError, setBackupDirError] = useState<string | null>(null);
 
   useEffect(() => {
     setHealthThresholdsState(getHealthThresholds());
   }, []);
 
+  const [syncFolder, setSyncFolder] = useState("");
+  const [syncFolderSaving, setSyncFolderSaving] = useState(false);
+  const [syncFolderError, setSyncFolderError] = useState<string | null>(null);
+
   useEffect(() => {
-    Promise.all([api.customFieldList(), api.attachmentsDirGet()])
-      .then(([fields, dir]) => {
+    Promise.all([api.customFieldList(), api.attachmentsDirGet(), api.backupDirGet(), api.syncFolderGet()])
+      .then(([fields, dir, backup, sync]) => {
         setCustomFields(fields);
         setAttachmentsDir(dir);
+        setBackupDir(backup ?? "");
+        setSyncFolder(sync ?? "");
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -115,6 +125,59 @@ export function Settings() {
 
       <Card className="mb-6">
         <CardHeader>
+          <CardTitle className="text-base">Yedekleme (F3)</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            F3.1: Uygulama kapanırken son hali otomatik yedeklenir; son 7 yedek tutulur (uygulama veri klasöründe backups).
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label>Yedekleri buraya da kopyala (F3.2)</Label>
+            <div className="flex gap-2">
+              <Input
+                value={backupDir}
+                onChange={(e) => setBackupDir(e.target.value)}
+                placeholder="İsteğe bağlı: ek yedek klasörü"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const selected = await openDialog({ directory: true, title: "Yedek klasörü seç" });
+                  if (selected && typeof selected === "string") setBackupDir(selected);
+                  else if (Array.isArray(selected) && selected[0]) setBackupDir(selected[0]);
+                }}
+              >
+                <FolderOpen className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Boş bırakırsanız sadece uygulama veri klasöründeki yedekler kullanılır.
+            </p>
+          </div>
+          {backupDirError && (
+            <p className="rounded border border-destructive/50 bg-destructive/10 p-2 text-sm text-destructive">
+              {backupDirError}
+            </p>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={backupDirSaving}
+            onClick={() => {
+              setBackupDirSaving(true);
+              setBackupDirError(null);
+              api.backupDirSet(backupDir.trim()).catch((e) => setBackupDirError(String(e))).finally(() => setBackupDirSaving(false));
+            }}
+          >
+            {backupDirSaving ? "Kaydediliyor…" : "Yedek klasörünü kaydet"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
           <CardTitle className="text-base">Attachment klasörü (A6)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -148,6 +211,53 @@ export function Settings() {
             }}
           >
             {attachmentsSaving ? "Kaydediliyor…" : "Kaydet"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">Sync klasörü (G1)</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            G1.1: NAS, Google Drive, Dropbox lokal klasörü vb. seçin. G1.2: Uygulama kapanırken şifreli DB bu klasöre vault-sync.encrypted olarak yazılır. G1.3: İkinci cihazda “Sync klasöründen aç” ile aynı passphrase ile açabilirsiniz.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              value={syncFolder}
+              onChange={(e) => setSyncFolder(e.target.value)}
+              placeholder="İsteğe bağlı: sync klasörü"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const selected = await openDialog({ directory: true, title: "Sync klasörü seç" });
+                if (selected && typeof selected === "string") setSyncFolder(selected);
+                else if (Array.isArray(selected) && selected[0]) setSyncFolder(selected[0]);
+              }}
+            >
+              <FolderOpen className="h-4 w-4" />
+            </Button>
+          </div>
+          {syncFolderError && (
+            <p className="rounded border border-destructive/50 bg-destructive/10 p-2 text-sm text-destructive">
+              {syncFolderError}
+            </p>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={syncFolderSaving}
+            onClick={() => {
+              setSyncFolderSaving(true);
+              setSyncFolderError(null);
+              api.syncFolderSet(syncFolder.trim()).catch((e) => setSyncFolderError(String(e))).finally(() => setSyncFolderSaving(false));
+            }}
+          >
+            {syncFolderSaving ? "Kaydediliyor…" : "Sync klasörünü kaydet"}
           </Button>
         </CardContent>
       </Card>

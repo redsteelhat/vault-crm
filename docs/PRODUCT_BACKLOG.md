@@ -161,8 +161,8 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### F3 — Yedekleme ve panic
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| F3.1 | Otomatik lokal backup | Versiyonlu yedek (örn. günlük); uygulama veri klasöründe veya kullanıcı seçtiği klasör | ☐ |
-| F3.2 | Kullanıcı yedek klasörü | “Yedekleri buraya da kopyala” (BYO folder) | ☐ |
+| F3.1 | Otomatik lokal backup | Versiyonlu yedek (örn. günlük); uygulama veri klasöründe veya kullanıcı seçtiği klasör | ☑ |
+| F3.2 | Kullanıcı yedek klasörü | “Yedekleri buraya da kopyala” (BYO folder) | ☑ |
 | F3.3 | Panic lock | Kısayol veya buton: uygulamayı kilitle / ekranı hızlıca gizle; tekrar açmak için passphrase | ☐ |
 
 ---
@@ -172,9 +172,9 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### G1 — Folder Sync
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| G1.1 | Klasör seçimi | Kullanıcı bir klasör seçer (NAS, Google Drive, Dropbox lokal senkronlu klasör vb.) | ☐ |
-| G1.2 | Şifreli yazma | DB (veya snapshot) şifreli olarak o klasöre yazılır; format dokümante | ☐ |
-| G1.3 | Çok cihaz | Aynı klasörü kullanan ikinci cihar “bu klasörden aç” ile aynı veriyi kullanır | ☐ |
+| G1.1 | Klasör seçimi | Kullanıcı bir klasör seçer (NAS, Google Drive, Dropbox lokal senkronlu klasör vb.) | ☑ |
+| G1.2 | Şifreli yazma | DB (veya snapshot) şifreli olarak o klasöre yazılır; format dokümante | ☑ |
+| G1.3 | Çok cihaz | Aynı klasörü kullanan ikinci cihar “bu klasörden aç” ile aynı veriyi kullanır | ☑ |
 
 ### G2 — LAN / P2P sync
 | # | Özellik | Detay / Kriter | Todo |

@@ -18,6 +18,9 @@ const VAULT_DB: &str = "vault.db";
 const VAULT_DB_ENCRYPTED: &str = "vault.db.encrypted";
 const VAULT_DB_TMP: &str = "vault.db.tmp";
 
+/// G1.2: Filename in sync folder (NAS, Dropbox, etc.); same format as vault.db.encrypted (AES-256-GCM).
+pub const VAULT_SYNC_NAME: &str = "vault-sync.encrypted";
+
 /// F1.2: Key in OS keychain (Windows Credential Manager, macOS Keychain, Linux Secret Service).
 fn get_db_key() -> Result<Option<Vec<u8>>, String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ENTRY).map_err(|e| e.to_string())?;
@@ -186,6 +189,27 @@ pub fn setup_create_key(app: &AppHandle, passphrase: Option<String>) -> Result<(
     let plaintext = std::fs::read(&path_tmp).map_err(|e| e.to_string())?;
     let ciphertext = encrypt_file(&key, &plaintext)?;
     std::fs::write(&path_encrypted, &ciphertext).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// G1.3: Open from sync folder — copy vault-sync.encrypted from folder to app_data, derive key from passphrase, store key.
+pub fn open_from_sync_folder(app: &AppHandle, folder_path: &str, passphrase: &str) -> Result<(), String> {
+    let folder_path = folder_path.trim();
+    if folder_path.is_empty() {
+        return Err("Klasör yolu boş".to_string());
+    }
+    if passphrase.len() < 8 {
+        return Err("Passphrase en az 8 karakter olmalı".to_string());
+    }
+    let app_data = app_data_dir(app).map_err(|e| e.to_string())?;
+    let source = std::path::Path::new(folder_path).join(VAULT_SYNC_NAME);
+    if !source.exists() {
+        return Err("Sync klasöründe vault-sync.encrypted bulunamadı".to_string());
+    }
+    let dest = app_data.join(VAULT_DB_ENCRYPTED);
+    std::fs::copy(&source, &dest).map_err(|e| e.to_string())?;
+    let key = derive_key(passphrase)?;
+    set_db_key(&key)?;
     Ok(())
 }
 

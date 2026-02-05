@@ -280,4 +280,15 @@ export const api = {
     invoke<void>("encryption_migrate_plain_db", { passphrase: passphrase ?? null }),
   /** After setup/migrate: open DB and clear setup state */
   encryptionSetupOpenDb: () => invoke<void>("encryption_setup_open_db"),
+
+  /** F3.2: User backup folder — "Yedekleri buraya da kopyala" */
+  backupDirGet: () => invoke<string>("backup_dir_get"),
+  backupDirSet: (path: string) => invoke<void>("backup_dir_set", { path }),
+
+  /** G1.1: Sync folder (NAS, Dropbox, etc.) — DB written as vault-sync.encrypted */
+  syncFolderGet: () => invoke<string>("sync_folder_get"),
+  syncFolderSet: (path: string) => invoke<void>("sync_folder_set", { path }),
+  /** G1.3: Open from sync folder — copy file + unlock with passphrase */
+  openFromSyncFolder: (folderPath: string, passphrase: string) =>
+    invoke<void>("open_from_sync_folder", { folderPath, passphrase }),
 };

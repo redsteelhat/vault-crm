@@ -54,6 +54,12 @@ Veri yalnızca cihazda (app data dir’de şifreli `vault.db.encrypted`; F1).
 - **Telemetri kapalı (F2.2):** Varsayılan olarak hiçbir kullanım verisi veya analitik gönderilmez.
 - **Crash raporu (F2.3):** İsteğe bağlı; Ayarlar > Gizlilik’ten açılırsa crash log anonim olarak gönderilebilir (özellik ileride tamamlanacak).
 
+## G1 — Folder Sync (opsiyonel)
+
+- **G1.1:** Ayarlar > Sync klasörü ile bir klasör seçin (NAS, Google Drive, Dropbox lokal klasör vb.).
+- **G1.2:** Uygulama kapanırken şifreli DB `vault-sync.encrypted` olarak bu klasöre yazılır. Format: `vault.db.encrypted` ile aynı (AES-256-GCM ile şifrelenmiş SQLite; 12 byte nonce + ciphertext).
+- **G1.3:** İkinci cihazda ilk açılışta “Sync klasöründen aç” seçin, aynı klasörü ve **aynı passphrase**’ı girin; aynı veri açılır.
+
 ## İkonlar
 
 Uygulama ikonu için `pnpm tauri icon` ile kendi ikonunu üretebilirsin (kaynak: `app-icon.png`). Varsayılan placeholder kullanılabilir.

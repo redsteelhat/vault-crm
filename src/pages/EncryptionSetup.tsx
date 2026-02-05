@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { KeyRound, AlertTriangle } from "lucide-react";
+import { KeyRound, AlertTriangle, FolderOpen } from "lucide-react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 type SetupReason = "first_run" | "migrate_plain";
 
@@ -24,11 +25,35 @@ export function EncryptionSetup({
   const [confirmPassphrase, setConfirmPassphrase] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [openFromSync, setOpenFromSync] = useState(false);
+  const [syncFolderPath, setSyncFolderPath] = useState("");
+  const [syncPassphrase, setSyncPassphrase] = useState("");
 
   const isFirstRun = reason === "first_run";
 
   const submit = async () => {
     setError(null);
+    if (openFromSync) {
+      if (!syncFolderPath.trim()) {
+        setError("Sync klasörü seçin.");
+        return;
+      }
+      if (syncPassphrase.length < 8) {
+        setError("Passphrase en az 8 karakter olmalı (diğer cihazdaki ile aynı).");
+        return;
+      }
+      setLoading(true);
+      try {
+        await api.openFromSyncFolder(syncFolderPath.trim(), syncPassphrase);
+        await api.encryptionSetupOpenDb();
+        onComplete();
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     if (usePassphrase) {
       if (passphrase.length < 8) {
         setError("Passphrase en az 8 karakter olmalı.");
@@ -78,6 +103,54 @@ export function EncryptionSetup({
             </div>
           </div>
 
+          {isFirstRun && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <input type="radio" checked={!openFromSync} onChange={() => setOpenFromSync(false)} className="rounded" />
+                Yeni oluştur (bu cihazda sıfırdan başla)
+              </Label>
+              <Label className="flex items-center gap-2">
+                <input type="radio" checked={openFromSync} onChange={() => setOpenFromSync(true)} className="rounded" />
+                Sync klasöründen aç (G1.3 — diğer cihazdaki veriyi kullan)
+              </Label>
+            </div>
+          )}
+
+          {openFromSync && isFirstRun && (
+            <>
+              <div className="space-y-2">
+                <Label>Sync klasörü (vault-sync.encrypted bu klasörde olmalı)</Label>
+                <div className="flex gap-2">
+                  <Input value={syncFolderPath} onChange={(e) => setSyncFolderPath(e.target.value)} placeholder="Klasör seçin" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      const selected = await openDialog({ directory: true, title: "Sync klasörü seç" });
+                      if (selected && typeof selected === "string") setSyncFolderPath(selected);
+                      else if (Array.isArray(selected) && selected[0]) setSyncFolderPath(selected[0]);
+                    }}
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sync-passphrase">Passphrase (diğer cihazdaki ile aynı)</Label>
+                <Input
+                  id="sync-passphrase"
+                  type="password"
+                  placeholder="En az 8 karakter"
+                  value={syncPassphrase}
+                  onChange={(e) => setSyncPassphrase(e.target.value)}
+                  autoComplete="current-password"
+                />
+              </div>
+            </>
+          )}
+
+          {!openFromSync && (
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <input
@@ -98,8 +171,9 @@ export function EncryptionSetup({
               Passphrase belirle (unutma riski sende)
             </Label>
           </div>
+          )}
 
-          {usePassphrase && (
+          {!openFromSync && usePassphrase && (
             <>
               <div className="space-y-2">
                 <Label htmlFor="passphrase">Passphrase</Label>
@@ -133,7 +207,13 @@ export function EncryptionSetup({
           )}
 
           <Button onClick={submit} disabled={loading} className="w-full">
-            {loading ? "İşleniyor…" : isFirstRun ? "Anahtar oluştur ve başla" : "Şifrele ve devam et"}
+            {loading
+              ? "İşleniyor…"
+              : openFromSync
+                ? "Sync klasöründen aç"
+                : isFirstRun
+                  ? "Anahtar oluştur ve başla"
+                  : "Şifrele ve devam et"}
           </Button>
         </CardContent>
       </Card>

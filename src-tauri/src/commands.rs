@@ -6,7 +6,7 @@ use rusqlite::{params, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use tauri::State;
+use tauri::{Manager, State};
 use uuid::Uuid;
 
 use aes_gcm::aead::{Aead, KeyInit};
@@ -15,7 +15,7 @@ use base64::{engine::general_purpose, Engine as _};
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-use crate::db::{DbState, EncryptedPathsState, EncryptionSetupState};
+use crate::db::{DbState, EncryptedPathsState, EncryptionSetupState, VAULT_SYNC_NAME};
 
 // ---- Company (A1.5 şirket kartı) ----
 
@@ -1147,6 +1147,120 @@ pub fn attachments_dir_set(db: State<DbState>, path: String) -> Result<(), Strin
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let conn = conn.as_ref().ok_or("DB not initialized")?;
     setting_set(conn, "attachments_dir", path)
+}
+
+// ---- F3 Backup (F3.1 auto versioned, F3.2 user folder) ----
+
+const BACKUP_KEEP_COUNT: usize = 7;
+const BACKUP_PREFIX: &str = "vault-backup-";
+const BACKUP_SUFFIX: &str = ".encrypted";
+
+/// F3.1: Create versioned backup; F3.2: also copy to user backup_dir if set. Call after flush on window close.
+pub fn run_backup(
+    app: &tauri::AppHandle,
+    conn: &rusqlite::Connection,
+    encrypted_path: &Path,
+) -> Result<(), String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&app_data).map_err(|e| e.to_string())?;
+    let backups_dir = app_data.join("backups");
+    std::fs::create_dir_all(&backups_dir).map_err(|e| e.to_string())?;
+
+    let timestamp = Utc::now().format("%Y%m%d-%H%M%S");
+    let name = format!("{}{}{}", BACKUP_PREFIX, timestamp, BACKUP_SUFFIX);
+    let dest = backups_dir.join(&name);
+    std::fs::copy(encrypted_path, &dest).map_err(|e| e.to_string())?;
+
+    prune_backups_in_dir(&backups_dir, BACKUP_KEEP_COUNT)?;
+
+    if let Some(extra) = setting_get(conn, "backup_dir")? {
+        let extra_path = PathBuf::from(extra.trim());
+        if !extra_path.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(&extra_path);
+            let dest_extra = extra_path.join(&name);
+            let _ = std::fs::copy(encrypted_path, &dest_extra);
+            prune_backups_in_dir(&extra_path, BACKUP_KEEP_COUNT).ok();
+        }
+    }
+    // G1.2: Write encrypted DB to sync folder (fixed name; format documented).
+    if let Some(sync_dir) = setting_get(conn, "sync_folder")? {
+        let sync_path = PathBuf::from(sync_dir.trim());
+        if !sync_path.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(&sync_path);
+            let dest_sync = sync_path.join(VAULT_SYNC_NAME);
+            let _ = std::fs::copy(encrypted_path, &dest_sync);
+        }
+    }
+    Ok(())
+}
+
+fn prune_backups_in_dir(dir: &Path, keep: usize) -> Result<(), String> {
+    let mut entries: Vec<_> = std::fs::read_dir(dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with(BACKUP_PREFIX) && n.ends_with(BACKUP_SUFFIX))
+                .unwrap_or(false)
+        })
+        .collect();
+    entries.sort_by(|a, b| {
+        b.path()
+            .metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+            .cmp(
+                &a.path()
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+            )
+    });
+    for e in entries.into_iter().skip(keep) {
+        let _ = std::fs::remove_file(e.path());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn backup_dir_get(db: State<DbState>) -> Result<String, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    Ok(setting_get(conn, "backup_dir")?.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn backup_dir_set(db: State<DbState>, path: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    setting_set(conn, "backup_dir", path.trim())
+}
+
+// ---- G1 Folder Sync (G1.1 folder, G1.2 write to sync, G1.3 open from sync) ----
+
+#[tauri::command]
+pub fn sync_folder_get(db: State<DbState>) -> Result<String, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    Ok(setting_get(conn, "sync_folder")?.unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn sync_folder_set(db: State<DbState>, path: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = conn.as_ref().ok_or("DB not initialized")?;
+    setting_set(conn, "sync_folder", path.trim())
+}
+
+/// G1.3: Copy vault-sync.encrypted from folder to app_data, derive key from passphrase, store key. Call encryption_setup_open_db after.
+#[tauri::command]
+pub fn open_from_sync_folder(app: tauri::AppHandle, folder_path: String, passphrase: String) -> Result<(), String> {
+    crate::db::open_from_sync_folder(&app, &folder_path, &passphrase)
 }
 
 #[tauri::command]

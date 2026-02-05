@@ -37,6 +37,7 @@ pub fn run() {
                             (guard_db.as_ref(), guard_paths.as_ref())
                         {
                             let _ = db::flush_encrypted_db(conn, temp.as_path(), enc.as_path());
+                            let _ = commands::run_backup(&app, conn, enc.as_path());
                         }
                     }
                 }
@@ -68,6 +69,11 @@ pub fn run() {
             commands::reminder_snooze,
             commands::attachments_dir_get,
             commands::attachments_dir_set,
+            commands::backup_dir_get,
+            commands::backup_dir_set,
+            commands::sync_folder_get,
+            commands::sync_folder_set,
+            commands::open_from_sync_folder,
             commands::attachment_list,
             commands::attachment_add,
             commands::attachment_delete,
