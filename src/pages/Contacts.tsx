@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, type Contact, type CustomField, type Company } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -6,8 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserPlus, Search } from "lucide-react";
+import { UserPlus, Search, Bookmark, Trash2 } from "lucide-react";
 import { getRelationshipHealthRecencyOnly, HEALTH_COLORS, type HealthStatus } from "@/lib/relationshipHealth";
+import {
+  getSavedViews,
+  saveSavedView,
+  deleteSavedView,
+  type SavedView,
+  type SavedViewFilters,
+} from "@/lib/savedViews";
 
 function formatDate(s: string | null) {
   if (!s) return "—";
@@ -50,10 +57,18 @@ export function Contacts() {
   const [fieldFilterValue, setFieldFilterValue] = useState<string>("");
   const [fieldFilterIds, setFieldFilterIds] = useState<Set<string> | null>(null);
   const [hashtagFilterIds, setHashtagFilterIds] = useState<Set<string> | null>(null);
+  const [ftsSearchIds, setFtsSearchIds] = useState<Set<string> | null>(null);
+  const [cityFilter, setCityFilter] = useState("");
+  const [filterMode, setFilterMode] = useState<"and" | "or">("and");
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => getSavedViews());
   const [loading, setLoading] = useState(true);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const hashtagParam = searchParams.get("hashtag");
+  // setSearchParams used by applySavedView (E1.3)
   const [showAdd, setShowAdd] = useState(false);
+  const [showSavedViews, setShowSavedViews] = useState(false);
+  const [saveViewName, setSaveViewName] = useState("");
+  const savedViewsRef = useRef<HTMLDivElement>(null);
   const [validation, setValidation] = useState<{
     email?: boolean;
     email_secondary?: boolean;
@@ -125,6 +140,16 @@ export function Contacts() {
   }, [fieldFilterId, fieldFilterValue]);
 
   useEffect(() => {
+    if (!showSavedViews) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (savedViewsRef.current && !savedViewsRef.current.contains(e.target as Node))
+        setShowSavedViews(false);
+    };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, [showSavedViews]);
+
+  useEffect(() => {
     if (!hashtagParam?.trim()) {
       setHashtagFilterIds(null);
       return;
@@ -135,43 +160,137 @@ export function Contacts() {
       .catch(() => setHashtagFilterIds(new Set()));
   }, [hashtagParam]);
 
+  // E1.1: Full-text search (SQLite FTS) when search non-empty
+  useEffect(() => {
+    if (!search.trim()) {
+      setFtsSearchIds(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      api
+        .searchContacts(search.trim())
+        .then((ids) => setFtsSearchIds(new Set(ids)))
+        .catch(() => setFtsSearchIds(new Set()));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const contactsList = Array.isArray(contacts) ? contacts : [];
-  let filtered = contactsList;
-  if (search.trim()) {
-    filtered = filtered.filter(
-      (c) =>
-        `${c.first_name} ${c.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
-        (c.company ?? "").toLowerCase().includes(search.toLowerCase()) ||
-        (c.email ?? "").toLowerCase().includes(search.toLowerCase())
-    );
-  }
-  if (fieldFilterIds) {
-    filtered = filtered.filter((c) => fieldFilterIds.has(c.id));
-  }
-  if (hashtagFilterIds) {
-    filtered = filtered.filter((c) => hashtagFilterIds.has(c.id));
-  }
-  if (touchFilter === "next_this_week") {
+
+  // E1.2: AND/OR filtre birleştirme + city
+  const cityLower = cityFilter.trim().toLowerCase();
+  const nextWeekMon = (() => {
     const now = new Date();
-    const day = now.getDay();
     const mon = new Date(now);
-    mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+    mon.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
     mon.setHours(0, 0, 0, 0);
-    const sun = new Date(mon);
-    sun.setDate(mon.getDate() + 6);
-    sun.setHours(23, 59, 59, 999);
-    filtered = filtered.filter((c) => {
-      const nt = c.next_touch_at ? new Date(c.next_touch_at) : null;
-      return nt != null && nt >= mon && nt <= sun;
-    });
+    return mon;
+  })();
+  const nextWeekSun = new Date(nextWeekMon);
+  nextWeekSun.setDate(nextWeekMon.getDate() + 6);
+  nextWeekSun.setHours(23, 59, 59, 999);
+  const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+  let filtered: typeof contactsList;
+  if (filterMode === "or") {
+    const anyIds = new Set<string>();
+    if (search.trim() && ftsSearchIds) ftsSearchIds.forEach((id) => anyIds.add(id));
+    else if (search.trim())
+      contactsList.forEach((c) => {
+        if (
+          `${c.first_name} ${c.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
+          (c.company ?? "").toLowerCase().includes(search.toLowerCase()) ||
+          (c.email ?? "").toLowerCase().includes(search.toLowerCase())
+        )
+          anyIds.add(c.id);
+      });
+    if (fieldFilterIds) fieldFilterIds.forEach((id) => anyIds.add(id));
+    if (hashtagFilterIds) hashtagFilterIds.forEach((id) => anyIds.add(id));
+    if (touchFilter === "next_this_week")
+      contactsList.forEach((c) => {
+        const nt = c.next_touch_at ? new Date(c.next_touch_at) : null;
+        if (nt != null && nt >= nextWeekMon && nt <= nextWeekSun) anyIds.add(c.id);
+      });
+    if (touchFilter === "last_30_plus")
+      contactsList.forEach((c) => {
+        const lt = c.last_touched_at ? new Date(c.last_touched_at).getTime() : 0;
+        if (lt === 0 || lt <= cutoff30) anyIds.add(c.id);
+      });
+    if (cityLower)
+      contactsList.forEach((c) => {
+        if ((c.city ?? "").toLowerCase().includes(cityLower)) anyIds.add(c.id);
+      });
+    if (
+      !search.trim() &&
+      !fieldFilterIds?.size &&
+      !hashtagFilterIds?.size &&
+      !touchFilter &&
+      !cityLower
+    )
+      filtered = contactsList;
+    else filtered = contactsList.filter((c) => anyIds.has(c.id));
+  } else {
+    filtered = contactsList;
+    if (search.trim()) {
+      if (ftsSearchIds) filtered = filtered.filter((c) => ftsSearchIds!.has(c.id));
+      else
+        filtered = filtered.filter(
+          (c) =>
+            `${c.first_name} ${c.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
+            (c.company ?? "").toLowerCase().includes(search.toLowerCase()) ||
+            (c.email ?? "").toLowerCase().includes(search.toLowerCase())
+        );
+    }
+    if (fieldFilterIds) filtered = filtered.filter((c) => fieldFilterIds.has(c.id));
+    if (hashtagFilterIds) filtered = filtered.filter((c) => hashtagFilterIds.has(c.id));
+    if (touchFilter === "next_this_week")
+      filtered = filtered.filter((c) => {
+        const nt = c.next_touch_at ? new Date(c.next_touch_at) : null;
+        return nt != null && nt >= nextWeekMon && nt <= nextWeekSun;
+      });
+    if (touchFilter === "last_30_plus")
+      filtered = filtered.filter((c) => {
+        const lt = c.last_touched_at ? new Date(c.last_touched_at).getTime() : 0;
+        return lt === 0 || lt <= cutoff30;
+      });
+    if (cityLower)
+      filtered = filtered.filter((c) => (c.city ?? "").toLowerCase().includes(cityLower));
   }
-  if (touchFilter === "last_30_plus") {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    filtered = filtered.filter((c) => {
-      const lt = c.last_touched_at ? new Date(c.last_touched_at).getTime() : 0;
-      return lt === 0 || lt <= cutoff;
+
+  const applySavedView = (v: SavedView) => {
+    setSearch(v.filters.search);
+    setTouchFilter(v.filters.touchFilter);
+    setFieldFilterId(v.filters.fieldFilterId);
+    setFieldFilterValue(v.filters.fieldFilterValue);
+    setCityFilter(v.filters.city);
+    setFilterMode(v.filters.filterMode);
+    if (v.filters.hashtag)
+      setSearchParams({ hashtag: v.filters.hashtag });
+    else
+      setSearchParams({});
+    setShowSavedViews(false);
+  };
+
+  const saveCurrentView = () => {
+    const name = saveViewName.trim() || "Görünüm";
+    saveSavedView(name, {
+      search,
+      touchFilter,
+      fieldFilterId,
+      fieldFilterValue,
+      hashtag: hashtagParam ?? "",
+      city: cityFilter,
+      filterMode,
     });
-  }
+    setSavedViews(getSavedViews());
+    setSaveViewName("");
+    setShowSavedViews(false);
+  };
+
+  const removeSavedView = (id: string) => {
+    deleteSavedView(id);
+    setSavedViews(getSavedViews());
+  };
 
   if (loading) {
     return (
@@ -433,11 +552,82 @@ export function Contacts() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="İsim, şirket veya email ile ara…"
+            placeholder="E1.1 FTS: isim, not, şirket…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
+        </div>
+        <select
+          value={filterMode}
+          onChange={(e) => setFilterMode(e.target.value as "and" | "or")}
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          title="E1.2 AND/OR"
+        >
+          <option value="and">Tümü (AND)</option>
+          <option value="or">Herhangi (OR)</option>
+        </select>
+        <Input
+          placeholder="Şehir (E1.2)"
+          value={cityFilter}
+          onChange={(e) => setCityFilter(e.target.value)}
+          className="h-10 w-32"
+        />
+        <div className="relative" ref={savedViewsRef}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowSavedViews((s) => !s);
+            }}
+          >
+            <Bookmark className="mr-1 h-4 w-4" />
+            Kayıtlı görünüm (E1.3)
+          </Button>
+          {showSavedViews && (
+            <div className="absolute left-0 top-full z-10 mt-1 w-56 rounded-md border bg-background p-2 shadow-lg">
+              <div className="mb-2 flex gap-1">
+                <input
+                  type="text"
+                  placeholder="Görünüm adı"
+                  value={saveViewName}
+                  onChange={(e) => setSaveViewName(e.target.value)}
+                  className="h-8 flex-1 rounded border border-input bg-background px-2 text-sm"
+                />
+                <Button variant="outline" size="sm" onClick={saveCurrentView}>
+                  Kaydet
+                </Button>
+              </div>
+              {savedViews.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Kayıtlı görünüm yok.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {savedViews.map((v) => (
+                    <li key={v.id} className="flex items-center justify-between gap-1 rounded px-2 py-1 hover:bg-muted">
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 truncate text-left text-sm"
+                        onClick={() => applySavedView(v)}
+                      >
+                        {v.name}
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeSavedView(v.id)}
+                        title="Sil"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
         {hashtagParam && (
           <span className="inline-flex items-center gap-1 rounded-md border border-input bg-muted px-3 py-2 text-sm">

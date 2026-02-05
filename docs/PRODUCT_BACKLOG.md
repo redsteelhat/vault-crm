@@ -121,9 +121,9 @@ Bu belge MVP + V1 genişleme + premium detayları kapsayan "tam katalog" ve todo
 ### E1 — Arama ve filtre
 | # | Özellik | Detay / Kriter | Todo |
 |---|---------|----------------|------|
-| E1.1 | Full-text search | İsim, not içeriği, şirket adı; SQLite FTS veya benzeri (local) | ☐ |
-| E1.2 | Filtreler | Last touched, tags, stage, city, source, custom fields; AND/OR birleştirme | ☐ |
-| E1.3 | Kayıtlı filtreler | Sık kullanılan filtreleri “saved view” olarak saklama | ☐ |
+| E1.1 | Full-text search | İsim, not içeriği, şirket adı; SQLite FTS veya benzeri (local) | ☑ |
+| E1.2 | Filtreler | Last touched, tags, stage, city, source, custom fields; AND/OR birleştirme | ☑ |
+| E1.3 | Kayıtlı filtreler | Sık kullanılan filtreleri “saved view” olarak saklama | ☑ |
 
 ### E2 — Dashboard
 | # | Özellik | Detay / Kriter | Todo |
